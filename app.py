@@ -29,15 +29,16 @@ def format_time(dt):
 # --- 4. APP INTERFACE ---
 st.set_page_config(page_title="Hostel Laundry", page_icon="🧺", layout="wide")
 st.title("🧺 ARIES Hostel Laundry Tracker")
-st.caption("Live Status • Intelligent Queue • Emergency Priority")
+st.caption("Live Status • Priority Queue • Emergency Handling")
 
-# Custom CSS to make expanders look like list items
+# Custom CSS for cleaner list items
 st.markdown("""
 <style>
 div[data-testid="stExpander"] details summary p {
     font-size: 1.1rem;
     font-weight: 600;
 }
+.urgent-text { color: #FF4B4B; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -103,38 +104,44 @@ for i, machine_name in enumerate(MACHINES):
             # --- QUEUE DISPLAY (CLICKABLE LIST) ---
             if queue:
                 st.divider()
-                st.write(f"**Queue ({len(queue)}) - Click name to swap**")
+                st.write(f"**Queue ({len(queue)}) - Click name to manage**")
                 
                 for idx, q_user in enumerate(queue):
                     # Build Label
                     urgency_icon = "🔥" if q_user.get('urgent') else ""
                     label = f"{idx+1}. {q_user['name']} {urgency_icon}"
                     
-                    # THE EXPANDER IS THE "CLICKABLE NAME"
                     with st.expander(label):
                         st.write(f"**Role:** {q_user['designation']}")
+                        
+                        # Show Urgency Reason in RED if it exists
                         if q_user.get('urgent_reason'):
-                            st.error(f"🚨 **Urgency:** {q_user['urgent_reason']}")
+                            st.markdown(f":fire: <span class='urgent-text'>Reason: {q_user['urgent_reason']}</span>", unsafe_allow_html=True)
+                        
                         if q_user.get('comment'):
-                            st.info(f"📝 **Note:** {q_user['comment']}")
+                            st.info(f"📝 Note: {q_user['comment']}")
                             
                         # CONTROLS
-                        st.caption("Enter YOUR PIN to perform actions:")
+                        st.caption("Enter YOUR PIN to Swap or Leave:")
                         action_pin = st.text_input("PIN", type="password", key=f"qpin_{machine_name}_{idx}")
                         
                         col_swap, col_leave = st.columns(2)
                         
-                        # Swap Logic (Let next person pass)
+                        # SWAP LOGIC: Available for everyone EXCEPT the last person
+                        # 1 swaps with 2, 2 swaps with 3...
                         if idx < len(queue) - 1:
-                            next_person = queue[idx+1]['name']
-                            if col_swap.button(f"▼ Let {next_person} Pass", key=f"swap_{machine_name}_{idx}"):
+                            next_person_name = queue[idx+1]['name']
+                            if col_swap.button(f"▼ Swap with {next_person_name}", key=f"swap_{machine_name}_{idx}"):
                                 if action_pin == q_user['pin'] or action_pin == MASTER_PIN:
+                                    # Perform Swap
                                     queue[idx], queue[idx+1] = queue[idx+1], queue[idx]
                                     doc_ref.update({"queue": queue})
                                     st.rerun()
                                 else:
                                     st.error("Wrong PIN")
-                        
+                        else:
+                            col_swap.button("▼ Swap", disabled=True, key=f"swap_dis_{machine_name}_{idx}", help="You are last in line.")
+
                         if col_leave.button("❌ Leave Queue", key=f"leave_{machine_name}_{idx}"):
                             if action_pin == q_user['pin'] or action_pin == MASTER_PIN:
                                 queue.pop(idx)
@@ -145,10 +152,6 @@ for i, machine_name in enumerate(MACHINES):
 
             # --- ACTION BUTTONS (START / JOIN) ---
             st.divider()
-            
-            # Scenario 1: Machine Running -> Show JOIN QUEUE
-            # Scenario 2: Machine Free, Queue Empty -> Show START
-            # Scenario 3: Machine Free, Queue Exists -> Show START (Restricted) AND JOIN QUEUE
             
             show_start = False
             show_join = False
@@ -200,31 +203,38 @@ for i, machine_name in enumerate(MACHINES):
                                 doc_ref.set({"current_user": user_data, "queue": queue})
                                 st.rerun()
 
-            # --- BUTTON 2: JOIN QUEUE ---
+            # --- BUTTON 2: JOIN QUEUE (DYNAMIC) ---
             if show_join:
                 with b_col2:
                     with st.popover("Join Queue", use_container_width=True):
-                        with st.form(f"join_form_{machine_name}"):
-                            st.write("### Join Queue")
-                            name = st.text_input("Name")
-                            desig = st.selectbox("Designation", ["JRF/SRF", "PhD", "Staff"], key=f"jd_{machine_name}")
-                            comment = st.text_input("Comment (Optional)", placeholder="e.g. White clothes", key=f"jc_{machine_name}")
-                            
-                            # Urgency Logic
-                            is_urgent = st.checkbox("🔥 Urgent?")
-                            urgent_reason = ""
-                            if is_urgent:
-                                urgent_reason = st.text_input("Reason", placeholder="Flight in 3 hours...")
+                        # NOTE: We are NOT using st.form here so we can have dynamic interactions
+                        st.write("### Join Queue")
+                        q_name = st.text_input("Name", key=f"qn_{machine_name}")
+                        q_desig = st.selectbox("Designation", ["JRF/SRF", "PhD", "Staff"], key=f"qd_{machine_name}")
+                        q_comment = st.text_input("Comment", placeholder="e.g. White clothes", key=f"qc_{machine_name}")
+                        
+                        # DYNAMIC URGENCY BOX
+                        q_is_urgent = st.checkbox("🔥 Urgent Priority?", key=f"qu_{machine_name}")
+                        q_urgent_reason = ""
+                        
+                        if q_is_urgent:
+                            st.markdown(":fire: **Please state your emergency:**")
+                            q_urgent_reason = st.text_input("Reason", placeholder="Flight in 3 hours...", key=f"qr_{machine_name}")
 
-                            pin = st.text_input("Set PIN", max_chars=4, type="password", key=f"jp_{machine_name}")
-                            
-                            if st.form_submit_button("Join Queue"):
-                                if name and pin:
+                        q_pin = st.text_input("Set PIN", max_chars=4, type="password", key=f"qp_{machine_name}")
+                        
+                        if st.button("Confirm Join", key=f"qbtn_{machine_name}"):
+                            if q_name and q_pin:
+                                if q_is_urgent and not q_urgent_reason:
+                                    st.error("Please enter a reason for urgency.")
+                                else:
                                     user_data = {
-                                        "name": name, "designation": desig, "pin": pin,
-                                        "comment": comment, "urgent": is_urgent,
-                                        "urgent_reason": urgent_reason,
+                                        "name": q_name, "designation": q_desig, "pin": q_pin,
+                                        "comment": q_comment, "urgent": q_is_urgent,
+                                        "urgent_reason": q_urgent_reason,
                                         "timestamp": get_current_time().isoformat()
                                     }
                                     doc_ref.update({"queue": firestore.ArrayUnion([user_data])})
                                     st.rerun()
+                            else:
+                                st.error("Name and PIN are required.")
