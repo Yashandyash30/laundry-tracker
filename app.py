@@ -4,10 +4,15 @@ from firebase_admin import credentials, firestore
 from datetime import datetime, timedelta
 
 # --- 1. SETUP FIREBASE ---
+import json
+
+# --- 1. SETUP FIREBASE ---
 # This function ensures we only connect to the database once,
 # even if you refresh the page.
 if not firebase_admin._apps:
-    cred = credentials.Certificate("key.json")
+    # Load the key from Streamlit Secrets (safe way!)
+    key_dict = json.loads(st.secrets["firebase"]["text_key"])
+    cred = credentials.Certificate(key_dict)
     firebase_admin.initialize_app(cred)
 
 db = firestore.client()
