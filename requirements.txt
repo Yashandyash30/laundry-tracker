@@ -2,3 +2,4 @@ streamlit
 firebase-admin
 google-cloud-firestore
 pytz
+streamlit-autorefresh
