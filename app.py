@@ -2,17 +2,11 @@ import streamlit as st
 import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime, timedelta
+import pytz
 
 # --- 1. SETUP FIREBASE ---
-import json
-
-# --- 1. SETUP FIREBASE ---
-# This function ensures we only connect to the database once,
-# even if you refresh the page.
-# --- 1. SETUP FIREBASE ---
+# Using the dictionary method (Bulletproof)
 if not firebase_admin._apps:
-    # Create a dictionary from the secrets directly
-    # (No json.loads needed anymore!)
     key_dict = dict(st.secrets["firebase"])
     cred = credentials.Certificate(key_dict)
     firebase_admin.initialize_app(cred)
@@ -20,111 +14,145 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 # --- 2. CONFIGURATION ---
-# List your machines here. You can add more later!
 MACHINES = ["Washing Machine 1", "Washing Machine 2", "Dryer 1"]
+IST = pytz.timezone('Asia/Kolkata')
 
 # --- 3. HELPER FUNCTIONS ---
-def get_ist_time():
-    # Returns current time adjusted for India (UTC+5:30)
-    # Useful if you deploy to a server later.
-    return datetime.utcnow() + timedelta(hours=5, minutes=30)
+def get_current_time():
+    return datetime.now(IST)
 
 def format_time(dt):
+    # If dt is a string (from database), convert it first
+    if isinstance(dt, str):
+        dt = datetime.fromisoformat(dt)
     return dt.strftime("%I:%M %p")
 
-# --- 4. THE APP INTERFACE ---
-st.set_page_config(page_title="Hostel Laundry Tracker", page_icon="🧺")
+# --- 4. APP INTERFACE ---
+st.set_page_config(page_title="Hostel Laundry", page_icon="🧺", layout="wide")
 st.title("🧺 ARIES Hostel Laundry Tracker")
+st.caption("Live Status • Queue System • Power Cut Management")
 
-# Create tabs for better organization
-tab1, tab2 = st.tabs(["Current Status", "Join Queue / Start"])
+# We use columns to make it compact (Side-by-Side view)
+cols = st.columns(len(MACHINES))
 
-# === TAB 1: DASHBOARD (Who is using what?) ===
-with tab1:
-    st.header("Live Machine Status")
+# --- MAIN LOOP FOR MACHINES ---
+for i, machine_name in enumerate(MACHINES):
+    with cols[i]:
+        # Create a container for each machine to make it look like a card
+        with st.container(border=True):
+            st.subheader(f"{machine_name}")
+            
+            # Fetch data
+            doc_ref = db.collection("machines").document(machine_name)
+            doc = doc_ref.get()
+            machine_data = doc.to_dict() if doc.exists else {}
+            
+            # --- STATUS LOGIC ---
+            current_user = machine_data.get("current_user", None)
+            queue = machine_data.get("queue", [])
+            
+            # Check if machine is actually running
+            is_running = False
+            if current_user:
+                end_time = datetime.fromisoformat(current_user['end_time'])
+                if get_current_time() < end_time:
+                    is_running = True
+                else:
+                    # Timer expired, but data is there. 
+                    # If queue has people, move next person in? 
+                    # For now, just show "Finished"
+                    pass
 
-    # Create a refresh button to get latest data
-    if st.button("🔄 Refresh Status"):
-        st.rerun()
+            # --- DISPLAY STATUS ---
+            if is_running:
+                st.error(f"🔴 BUSY")
+                st.write(f"👤 **{current_user['name']}** ({current_user['designation']})")
+                
+                remaining = int((end_time - get_current_time()).total_seconds() / 60)
+                st.metric("Time Left", f"{remaining} min", delta_color="inverse")
+                st.caption(f"Ends at: {format_time(end_time)}")
+                st.info(f"📝 {current_user.get('comment', 'No comments')}")
 
-    # Fetch data from Firestore
-    machines_ref = db.collection("machines")
+                # --- POWER CUT & END SESSION (Protected by PIN) ---
+                with st.expander("⚙️ Settings (User Only)"):
+                    pin_input = st.text_input(f"Enter PIN for {machine_name}", type="password", key=f"pin_{machine_name}")
+                    
+                    # Manual Power Cut Time
+                    add_time = st.number_input("Add Mins", min_value=5, value=15, step=5, key=f"time_{machine_name}")
+                    
+                    c1, c2 = st.columns(2)
+                    if c1.button("Add Time", key=f"add_{machine_name}"):
+                        if pin_input == current_user['pin']:
+                            new_end = end_time + timedelta(minutes=add_time)
+                            current_user['end_time'] = new_end.isoformat()
+                            doc_ref.update({"current_user": current_user})
+                            st.rerun()
+                        else:
+                            st.error("Wrong PIN!")
 
-    # Display each machine
-    for machine_name in MACHINES:
-        st.subheader(f"🏗️ {machine_name}")
-
-        # Get the specific document for this machine
-        doc = machines_ref.document(machine_name).get()
-
-        if doc.exists:
-            data = doc.to_dict()
-            end_time = data.get("end_time")
-            # Convert string back to datetime object
-            end_time_dt = datetime.fromisoformat(end_time)
-            current_time = get_ist_time()
-
-            if current_time < end_time_dt:
-                # MACHINE IS BUSY
-                remaining_mins = int((end_time_dt - current_time).total_seconds() / 60)
-
-                st.error(f"⚠️ IN USE by **{data.get('user_name')}** ({data.get('designation')})")
-                st.write(f"📝 Note: {data.get('comment')}")
-                st.metric("Time Remaining", f"{remaining_mins} mins", delta_color="inverse")
-                st.caption(f"Free at approx: {format_time(end_time_dt)}")
-
-                # POWER CUT FEATURE
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button(f"⚡ Power Cut (+15 mins) for {machine_name}"):
-                        new_end = end_time_dt + timedelta(minutes=15)
-                        machines_ref.document(machine_name).update({"end_time": new_end.isoformat()})
-                        st.success("Time extended!")
-                        st.rerun()
-                with col2:
-                    if st.button(f"✅ Finish Early ({machine_name})"):
-                        machines_ref.document(machine_name).delete()
-                        st.rerun()
+                    if c2.button("Finish", key=f"end_{machine_name}"):
+                        if pin_input == current_user['pin']:
+                            # If queue is empty, clear machine. If not, logic to pop queue (optional)
+                            # For simplicity: Clear machine, let next person claim it.
+                            doc_ref.update({"current_user": firestore.DELETE_FIELD})
+                            st.rerun()
+                        else:
+                            st.error("Wrong PIN!")
 
             else:
-                # MACHINE IS TECHNICALLY FREE BUT DATA EXISTS (Expired Timer)
-                st.success("✅ FREE TO USE")
-                st.caption("Previous timer finished.")
-                machines_ref.document(machine_name).delete() # Clean up
-        else:
-            # NO DATA = FREE
-            st.success("✅ FREE TO USE")
+                st.success("🟢 AVAILABLE")
+                st.write("Machine is free to use.")
 
-        st.divider()
+            # --- QUEUE DISPLAY ---
+            if queue:
+                st.divider()
+                st.write(f"**Queue ({len(queue)})**")
+                for idx, q_user in enumerate(queue):
+                    st.text(f"{idx+1}. {q_user['name']} ({q_user['designation']})")
 
-# === TAB 2: START A SESSION ===
-with tab2:
-    st.header("Start a Session")
-
-    with st.form("usage_form"):
-        name = st.text_input("Your Name")
-        designation = st.selectbox("Designation", ["PhD Scholar", "JRF/SRF", "Staff", "Visitor"])
-        selected_machine = st.selectbox("Select Machine", MACHINES)
-        duration = st.slider("Duration (minutes)", 15, 120, 45)
-        comment = st.text_input("Comments (e.g., 'Heavy load', 'Don't touch')")
-
-        submitted = st.form_submit_button("Start Machine")
-
-        if submitted:
-            if name:
-                # Calculate end time
-                end_time = get_ist_time() + timedelta(minutes=duration)
-
-                # Save to Firestore
-                db.collection("machines").document(selected_machine).set({
-                    "user_name": name,
-                    "designation": designation,
-                    "start_time": get_ist_time().isoformat(),
-                    "end_time": end_time.isoformat(),
-                    "comment": comment
-                })
-
-                st.success(f"Started {selected_machine}! It will end at {format_time(end_time)}.")
-                st.balloons()
-            else:
-                st.error("Please enter your name.")
+            # --- ACTION FORM (Start or Join Queue) ---
+            st.divider()
+            
+            # Determine button text
+            action_text = "Start Machine" if not is_running else "Join Queue"
+            
+            with st.popover(action_text):
+                with st.form(f"form_{machine_name}"):
+                    name = st.text_input("Name")
+                    desig = st.selectbox("Designation", ["PhD", "JRF/SRF", "Staff"], key=f"des_{machine_name}")
+                    if not is_running:
+                        duration = st.slider("Duration (mins)", 15, 120, 45, key=f"dur_{machine_name}")
+                    else:
+                        duration = 0 # Not needed for queue
+                        
+                    comment = st.text_input("Comment", key=f"com_{machine_name}")
+                    pin = st.text_input("Set 4-digit PIN (To stop later)", max_chars=4, type="password", key=f"setpin_{machine_name}")
+                    
+                    submitted = st.form_submit_button("Confirm")
+                    
+                    if submitted and name and pin:
+                        user_data = {
+                            "name": name,
+                            "designation": desig,
+                            "comment": comment,
+                            "pin": pin,
+                            "timestamp": get_current_time().isoformat()
+                        }
+                        
+                        if is_running:
+                            # ADD TO QUEUE
+                            # We use array_union to append to the list
+                            doc_ref.update({"queue": firestore.ArrayUnion([user_data])})
+                            st.toast(f"Added {name} to queue!")
+                        else:
+                            # START MACHINE
+                            end_time_val = get_current_time() + timedelta(minutes=duration)
+                            user_data["start_time"] = get_current_time().isoformat()
+                            user_data["end_time"] = end_time_val.isoformat()
+                            
+                            # If there was a queue, theoretically we should check if this user is first.
+                            # But for simplicity, we allow 'First to Click' if machine is Free.
+                            doc_ref.set({"current_user": user_data, "queue": queue}) # Keep queue intact
+                            st.toast(f"Machine started by {name}!")
+                        
+                        st.rerun()
