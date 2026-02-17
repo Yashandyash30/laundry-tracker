@@ -179,7 +179,7 @@ for i, machine_name in enumerate(MACHINES):
                 if current_user.get('comment'):
                     st.info(f"📝 Note: {current_user['comment']}")
                 
-                with st.expander("⚙️ Manage / Power Cut / Extend time"):
+                with st.expander("⚙️ Finish early / Extend time"):
                     pin_input = st.text_input("PIN", type="password", key=f"pin_{machine_name}")
                     
                     add_time = st.number_input("Add Mins", min_value=5, value=15, step=5, key=f"time_{machine_name}")
