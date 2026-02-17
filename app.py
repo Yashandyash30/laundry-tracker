@@ -4,6 +4,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime, timedelta
 import pytz
+from streamlit_autorefresh import st_autorefresh
 
 # --- 1. SETUP FIREBASE ---
 if not firebase_admin._apps:
@@ -14,30 +15,28 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 # --- 2. CONFIGURATION ---
+# Refresh every 30 seconds to check for status changes
+st_autorefresh(interval=30000, key="data_refresh")
+
 MACHINES = ["Washing Machine (Floor 3)", "Washing Machine (Floor 2)", "Dryer (Floor 3)"]
 IST = pytz.timezone('Asia/Kolkata')
 MASTER_PIN = st.secrets["general"]["master_pin"]
 BUFFER_MINUTES = 15
 
-# --- 3. JAVASCRIPT NOTIFICATION ENGINE ---
-# This function injects a script that the browser runs
+# --- 3. BROWSER NOTIFICATION SYSTEM ---
 def trigger_notification(title, body):
+    # This Javascript checks if the browser allows notifications and sends one
     js_code = f"""
     <script>
         function sendNotification() {{
             var title = "{title}";
             var options = {{
                 body: "{body}",
-                icon: "https://cdn-icons-png.flaticon.com/512/2954/2954888.png"
+                icon: "https://cdn-icons-png.flaticon.com/512/2954/2954888.png",
+                requireInteraction: true // Keeps notification on screen until clicked
             }};
             if (Notification.permission === "granted") {{
                 new Notification(title, options);
-            }} else if (Notification.permission !== "denied") {{
-                Notification.requestPermission().then(function (permission) {{
-                    if (permission === "granted") {{
-                        new Notification(title, options);
-                    }}
-                }});
             }}
         }}
         sendNotification();
@@ -46,7 +45,6 @@ def trigger_notification(title, body):
     components.html(js_code, height=0, width=0)
 
 def request_permission_button():
-    # Only works if the user clicks it manually
     components.html("""
     <script>
         function askPermission() {
@@ -55,11 +53,13 @@ def request_permission_button():
             });
         }
     </script>
-    <button onclick="askPermission()" style="
-        background-color: #4CAF50; color: white; padding: 10px 20px; 
-        border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">
-        🔔 Click to Enable Alerts
-    </button>
+    <div style="text-align: center; margin-bottom: 10px;">
+        <button onclick="askPermission()" style="
+            background-color: #FF4B4B; color: white; padding: 8px 16px; 
+            border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+            🔔 Enable Notifications (Click Me First)
+        </button>
+    </div>
     """, height=50)
 
 # --- 4. HELPER FUNCTIONS ---
@@ -71,17 +71,20 @@ def format_time(dt):
         dt = datetime.fromisoformat(dt)
     return dt.strftime("%I:%M %p")
 
+# Initialize Session State for Change Detection
+if 'machine_states' not in st.session_state:
+    st.session_state['machine_states'] = {}
+
 # --- 5. APP INTERFACE ---
 st.set_page_config(page_title="Hostel Laundry", page_icon="🧺", layout="wide")
 st.title("🧺 ARIES Laundry Tracker")
+st.caption("Auto-Refresh Enabled (30s) • Keep tab open for alerts")
 
-# Sidebar for Notification Setup
+# Sidebar for Permissions
 with st.sidebar:
-    st.header("🔔 Notifications")
-    st.write("Click below to allow browser alerts when machines become free.")
+    st.write("### ⚙️ Settings")
     request_permission_button()
-    st.divider()
-    st.info("Keep this tab open in the background to receive alerts.")
+    st.info("ℹ️ You must click the button above and 'Allow' to receive alerts.")
 
 # CSS Styles
 st.markdown("""
@@ -107,71 +110,84 @@ for i, machine_name in enumerate(MACHINES):
             queue = machine_data.get("queue", [])
             last_free_time_str = machine_data.get("last_free_time", None)
             
-            # --- CHECK RUNNING STATUS ---
+            # --- LOGIC & NOTIFICATION TRIGGERS ---
+            
+            # 1. Calculate Current State
             is_running = False
-            just_finished = False # Logic to detect transition
+            user_name = "None"
             
             if current_user:
                 end_time = datetime.fromisoformat(current_user['end_time'])
+                user_name = current_user['name']
                 if get_current_time() < end_time:
                     is_running = True
-                else:
-                    # It expired naturally just now!
-                    is_running = False
-                    just_finished = True 
+            
+            # 2. Retrieve Previous State (from 30s ago)
+            prev_state = st.session_state['machine_states'].get(machine_name, {
+                'is_running': is_running,
+                'queue_len': len(queue),
+                'urgent_count': sum(1 for q in queue if q.get('urgent')),
+                'first_in_line': queue[0]['name'] if queue else None
+            })
+            
+            # --- TRIGGER 1: TIME ENDS ---
+            # Machine WAS running, NOW is stopped
+            if prev_state['is_running'] and not is_running:
+                trigger_notification("⏰ Time's Up!", f"{user_name} finished on {machine_name}. Machine Free!")
+            
+            # --- TRIGGER 2: MACHINE AVAILABLE FOR QUEUE ---
+            # Machine WAS running, NOW stopped, AND Queue exists
+            if prev_state['is_running'] and not is_running and queue:
+                next_person = queue[0]['name']
+                trigger_notification("✅ Your Turn!", f"{next_person}, {machine_name} is ready for you!")
 
-            # --- DISPLAY STATUS ---
+            # --- TRIGGER 3: BUFFER TIMEOUT (Next Person Notified) ---
+            # If the first person in line CHANGED, but nobody started the machine... 
+            # it means the previous #1 was removed/swapped/timed out.
+            curr_first = queue[0]['name'] if queue else None
+            if not is_running and prev_state['first_in_line'] and curr_first:
+                if prev_state['first_in_line'] != curr_first:
+                    trigger_notification("⚠️ Timeout / Swap", f"{prev_state['first_in_line']} removed. {curr_first} is now next!")
+
+            # --- TRIGGER 4: EMERGENCY ADDED ---
+            # Count of urgent users increased
+            curr_urgent = sum(1 for q in queue if q.get('urgent'))
+            if curr_urgent > prev_state['urgent_count']:
+                trigger_notification("🔥 Emergency Request", f"Someone in queue for {machine_name} has an urgent need!")
+
+            # UPDATE STATE FOR NEXT REFRESH
+            st.session_state['machine_states'][machine_name] = {
+                'is_running': is_running,
+                'queue_len': len(queue),
+                'urgent_count': curr_urgent,
+                'first_in_line': curr_first
+            }
+
+            # --- DISPLAY UI ---
             if is_running:
                 st.error(f"🔴 BUSY: {current_user['name']}")
                 remaining = int((end_time - get_current_time()).total_seconds() / 60)
                 st.metric("Time Left", f"{remaining} min", delta_color="inverse")
-                st.caption(f"Ends: {format_time(end_time)}")
                 
-                # SETTINGS
                 with st.expander("⚙️ Manage"):
                     pin_input = st.text_input("PIN", type="password", key=f"pin_{machine_name}")
-                    c1, c2 = st.columns(2)
-                    if c1.button("Add 15m", key=f"add_{machine_name}"):
-                        if pin_input == current_user['pin'] or pin_input == MASTER_PIN:
-                            new_end = end_time + timedelta(minutes=15)
-                            current_user['end_time'] = new_end.isoformat()
-                            doc_ref.update({"current_user": current_user})
-                            st.rerun()
-                        else:
-                            st.error("Wrong PIN")
-                    if c2.button("Finish", key=f"end_{machine_name}"):
+                    if st.button("Finish", key=f"end_{machine_name}"):
                         if pin_input == current_user['pin'] or pin_input == MASTER_PIN:
                             doc_ref.update({
                                 "current_user": firestore.DELETE_FIELD,
                                 "last_free_time": get_current_time().isoformat()
                             })
-                            # NOTIFICATION TRIGGER (MANUAL FINISH)
-                            if queue:
-                                next_person = queue[0]['name']
-                                trigger_notification(f"{machine_name} Free!", f"Next up: {next_person}")
-                            else:
-                                trigger_notification(f"{machine_name} Free!", "Machine is now available.")
                             st.rerun()
                         else:
                             st.error("Wrong PIN")
             else:
                 st.success("🟢 AVAILABLE")
                 
-                # NOTIFICATION TRIGGER (AUTO TIMEOUT)
-                # If we detected it just finished naturally in this refresh cycle
-                if just_finished:
-                    # We need to ensure we don't spam. 
-                    # Realistically, this fires once when someone refreshes the page and sees it expired.
-                    if queue:
-                         trigger_notification(f"{machine_name} Finished!", f"Next: {queue[0]['name']}")
-                    else:
-                         trigger_notification(f"{machine_name} Finished!", "Available now.")
-
-                # --- BUFFER LOGIC ---
+                # Buffer Logic
                 effective_free_time = None
                 if last_free_time_str:
                     effective_free_time = datetime.fromisoformat(last_free_time_str)
-                elif current_user and just_finished:
+                elif current_user: # Just finished naturally
                     effective_free_time = datetime.fromisoformat(current_user['end_time'])
 
                 timeout_happened = False
@@ -194,20 +210,16 @@ for i, machine_name in enumerate(MACHINES):
                     with st.expander(f"{idx+1}. {q_user['name']} {urgency_icon}"):
                         if q_user.get('urgent_reason'):
                             st.markdown(f":fire: <span class='urgent-text'>{q_user['urgent_reason']}</span>", unsafe_allow_html=True)
-                        st.caption("Enter YOUR PIN to Swap/Leave:")
-                        action_pin = st.text_input("PIN", type="password", key=f"qpin_{machine_name}_{idx}")
                         
+                        action_pin = st.text_input("PIN", type="password", key=f"qpin_{machine_name}_{idx}")
                         c_swap, c_leave = st.columns(2)
                         
                         if idx < len(queue) - 1:
-                            next_name = queue[idx+1]['name']
-                            if c_swap.button(f"▼ Swap with {next_name}", key=f"swap_{machine_name}_{idx}"):
+                            if c_swap.button(f"▼ Swap Down", key=f"swap_{machine_name}_{idx}"):
                                 if action_pin == q_user['pin'] or action_pin == MASTER_PIN:
                                     queue[idx], queue[idx+1] = queue[idx+1], queue[idx]
                                     doc_ref.update({"queue": queue})
                                     st.rerun()
-                                else:
-                                    st.error("Wrong PIN")
                         
                         if c_leave.button("❌ Leave", key=f"lv_{machine_name}_{idx}"):
                             if action_pin == q_user['pin'] or action_pin == MASTER_PIN:
@@ -225,62 +237,49 @@ for i, machine_name in enumerate(MACHINES):
             elif queue:
                 show_join = True
                 
+                # Timeout Skip Button
                 if timeout_happened and len(queue) > 1:
                     st.write(f"**{queue[0]['name']} missed their turn.**")
-                    if st.button(f"🚀 Skip & Start ({queue[1]['name']})", key=f"skip_{machine_name}"):
+                    if st.button(f"🚀 Skip to {queue[1]['name']}", key=f"skip_{machine_name}"):
                          queue.pop(0)
                          doc_ref.update({"queue": queue, "last_free_time": get_current_time().isoformat()})
                          st.rerun()
 
                 with st.popover(f"Start ({queue[0]['name']})", use_container_width=True):
                     with st.form(f"st_form_{machine_name}"):
-                        name = st.text_input("Name (Must match queue)")
-                        desig = st.selectbox("Designation", ["PhD", "JRF/SRF", "Staff"])
+                        name = st.text_input("Name")
                         duration = st.slider("Duration", 15, 120, 45)
-                        pin = st.text_input("Set PIN", type="password")
+                        pin = st.text_input("PIN", type="password")
                         if st.form_submit_button("Start"):
                             if name.strip().lower() != queue[0]['name'].strip().lower():
                                 st.error(f"Only {queue[0]['name']} can start!")
                             else:
                                 queue.pop(0)
                                 end_val = get_current_time() + timedelta(minutes=duration)
-                                user_data = {
-                                    "name": name, "designation": desig, "pin": pin,
-                                    "start_time": get_current_time().isoformat(),
-                                    "end_time": end_val.isoformat()
-                                }
+                                user_data = {"name": name, "pin": pin, "start_time": get_current_time().isoformat(), "end_time": end_val.isoformat()}
                                 doc_ref.set({"current_user": user_data, "queue": queue})
                                 st.rerun()
             else:
                 with st.popover("Start Machine", use_container_width=True):
                     with st.form(f"free_st_{machine_name}"):
                         name = st.text_input("Name")
-                        desig = st.selectbox("Designation", ["PhD", "JRF/SRF", "Staff"])
                         duration = st.slider("Duration", 15, 120, 45)
-                        pin = st.text_input("Set PIN", type="password")
+                        pin = st.text_input("PIN", type="password")
                         if st.form_submit_button("Start"):
                             end_val = get_current_time() + timedelta(minutes=duration)
-                            user_data = {
-                                "name": name, "designation": desig, "pin": pin,
-                                "start_time": get_current_time().isoformat(),
-                                "end_time": end_val.isoformat()
-                            }
+                            user_data = {"name": name, "pin": pin, "start_time": get_current_time().isoformat(), "end_time": end_val.isoformat()}
                             doc_ref.set({"current_user": user_data, "queue": queue})
                             st.rerun()
 
             if show_join:
                 with st.popover("Join Queue", use_container_width=True):
                     q_name = st.text_input("Name", key=f"qn_{machine_name}")
-                    q_desig = st.selectbox("Designation", ["PhD", "JRF/SRF", "Staff"], key=f"qd_{machine_name}")
                     q_is_urgent = st.checkbox("🔥 Urgent?", key=f"qu_{machine_name}")
                     q_reason = st.text_input("Reason", key=f"qr_{machine_name}") if q_is_urgent else ""
-                    q_pin = st.text_input("Set PIN", type="password", key=f"qp_{machine_name}")
+                    q_pin = st.text_input("PIN", type="password", key=f"qp_{machine_name}")
                     
-                    if st.button("Confirm Join", key=f"qb_{machine_name}"):
+                    if st.button("Confirm", key=f"qb_{machine_name}"):
                         if q_name and q_pin:
-                            data = {
-                                "name": q_name, "designation": q_desig, "pin": q_pin,
-                                "urgent": q_is_urgent, "urgent_reason": q_reason
-                            }
+                            data = {"name": q_name, "pin": q_pin, "urgent": q_is_urgent, "urgent_reason": q_reason}
                             doc_ref.update({"queue": firestore.ArrayUnion([data])})
                             st.rerun()
