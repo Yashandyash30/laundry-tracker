@@ -14,7 +14,7 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 # --- 2. CONFIGURATION ---
-MACHINES = ["Washing Machine 1", "Washing Machine 2", "Dryer 1"]
+MACHINES = ["Washing Machine (Floor 3)", "Washing Machine (Floor 2)", "Dryer (Floor 3)"]
 IST = pytz.timezone('Asia/Kolkata')
 
 # --- 3. HELPER FUNCTIONS ---
@@ -119,7 +119,7 @@ for i, machine_name in enumerate(MACHINES):
             with st.popover(action_text):
                 with st.form(f"form_{machine_name}"):
                     name = st.text_input("Name")
-                    desig = st.selectbox("Designation", ["PhD", "JRF/SRF", "Staff"], key=f"des_{machine_name}")
+                    desig = st.selectbox("Designation", ["JRF/SRF", "Project Student", "Visitor", "Staff"], key=f"des_{machine_name}")
                     if not is_running:
                         duration = st.slider("Duration (mins)", 15, 120, 45, key=f"dur_{machine_name}")
                     else:
