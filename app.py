@@ -9,9 +9,11 @@ import json
 # --- 1. SETUP FIREBASE ---
 # This function ensures we only connect to the database once,
 # even if you refresh the page.
+# --- 1. SETUP FIREBASE ---
 if not firebase_admin._apps:
-    # Load the key from Streamlit Secrets (safe way!)
-    key_dict = json.loads(st.secrets["firebase"]["text_key"])
+    # Create a dictionary from the secrets directly
+    # (No json.loads needed anymore!)
+    key_dict = dict(st.secrets["firebase"])
     cred = credentials.Certificate(key_dict)
     firebase_admin.initialize_app(cred)
 
