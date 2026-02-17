@@ -19,7 +19,7 @@ db = firestore.client()
 # Refresh every 30 seconds to check for status changes
 st_autorefresh(interval=30000, key="data_refresh")
 
-MACHINES = ["Washing Machine (Floor 3)", "Washing Machine (Floor 2)", "Dryer (Floor 3)"]
+MACHINES = ["Washing Machine (Floor 3)", "Washing Machine (Floor 2)", "Clothes Dryer (Floor 3)"]
 IST = pytz.timezone('Asia/Kolkata')
 MASTER_PIN = st.secrets["general"]["master_pin"]
 BUFFER_MINUTES = 15
