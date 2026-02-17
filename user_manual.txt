@@ -1,0 +1,49 @@
+ARIES Hostel Laundry Tracker
+
+Welcome to our new digital system for managing the shared washing machines. No more climbing stairs just to find them busy!
+1. Check & Plan
+   Open the Link: https://aries-laundry.streamlit.app
+
+   Status at a Glance:
+
+        Green: Machine is free.
+
+        Red: Machine is busy. The app tells you exactly who is using it and when it will be free (e.g., “Expected: 10:30 PM”).
+
+2. Start Your Wash
+
+    If Free: Load your clothes, select the machine in the app, and click "Start Machine".
+
+    Set Your PIN: Create a simple 4-digit PIN (e.g., 1234).
+
+        Note: You need this PIN to stop the timer or extend time if the power goes out!
+
+3. The Queue
+
+If all machines are busy, click "Join Queue".
+
+    Urgency: If you have an emergency (e.g., no clothes to wear other then that), tick the "🔥 Urgent" box and state your reason.
+
+    The "Pass" System: You cannot cut the line. However, if you see someone behind you has an urgent need, you can choose to let them pass.
+
+        How: Click your name in the queue ➝ Enter YOUR PIN ➝ Click "▼ Swap Down".
+
+        Note: This is voluntary. Helping a friend in need is up to you!
+
+4. Stay Updated
+
+    Browser: Click "Enable Alerts" in the sidebar and keep the tab open for a popup when your machine is ready.
+
+    Telegram: Join the ARIES Laundry Updates group (https://t.me/+69YKX5iyRyM1NzJl) to get instant notifications on your phone even when the app is closed.
+
+5. Troubleshooting
+
+    Power Cut? Go to "Manage" ➝ Enter PIN ➝ "Add Time" (e.g., +15 mins).
+
+    Forgot PIN? Contact Yash (Admin) for a reset.
+
+
+Important : Time’s Up? Please collect clothes within 15 mins of finish time, or the next person has the right to skip your turn.
+
+Site Link: https://aries-laundry.streamlit.app
+Telegram Group : https://t.me/+69YKX5iyRyM1NzJl
