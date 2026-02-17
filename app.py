@@ -163,15 +163,38 @@ for i, machine_name in enumerate(MACHINES):
                 'first_in_line': curr_first
             }
 
-            # --- DISPLAY UI ---
+
+                # --- DISPLAY UI ---
             if is_running:
-                st.error(f"🔴 BUSY: {current_user['name']}")
+                desig_str = current_user.get('designation', '')
+                title_str = f"🔴 BUSY: {current_user['name']} ({desig_str})" if desig_str else f"🔴 BUSY: {current_user['name']}"
+                st.error(title_str)
+                
                 remaining = int((end_time - get_current_time()).total_seconds() / 60)
                 st.metric("Time Left", f"{remaining} min", delta_color="inverse")
                 
-                with st.expander("⚙️ Manage"):
+                avail_time_str = format_time(end_time)
+                st.write(f"🕒 **Expected Available at:** `{avail_time_str}`")
+                
+                if current_user.get('comment'):
+                    st.info(f"📝 Note: {current_user['comment']}")
+                
+                with st.expander("⚙️ Manage / Power Cut"):
                     pin_input = st.text_input("PIN", type="password", key=f"pin_{machine_name}")
-                    if st.button("Finish", key=f"end_{machine_name}"):
+                    
+                    add_time = st.number_input("Add Mins (Power Cut)", min_value=5, value=15, step=5, key=f"time_{machine_name}")
+                    
+                    c1, c2 = st.columns(2)
+                    if c1.button("Add Time", key=f"add_{machine_name}"):
+                        if pin_input == current_user['pin'] or pin_input == MASTER_PIN:
+                            new_end = end_time + timedelta(minutes=add_time)
+                            current_user['end_time'] = new_end.isoformat()
+                            doc_ref.update({"current_user": current_user})
+                            st.rerun()
+                        else:
+                            st.error("Wrong PIN")
+
+                    if c2.button("Finish Early", key=f"end_{machine_name}"):
                         if pin_input == current_user['pin'] or pin_input == MASTER_PIN:
                             doc_ref.update({
                                 "current_user": firestore.DELETE_FIELD,
@@ -183,11 +206,10 @@ for i, machine_name in enumerate(MACHINES):
             else:
                 st.success("🟢 AVAILABLE")
                 
-                # Buffer Logic
                 effective_free_time = None
                 if last_free_time_str:
                     effective_free_time = datetime.fromisoformat(last_free_time_str)
-                elif current_user: # Just finished naturally
+                elif current_user: 
                     effective_free_time = datetime.fromisoformat(current_user['end_time'])
 
                 timeout_happened = False
@@ -207,9 +229,15 @@ for i, machine_name in enumerate(MACHINES):
                 st.write(f"**Queue ({len(queue)})**")
                 for idx, q_user in enumerate(queue):
                     urgency_icon = "🔥" if q_user.get('urgent') else ""
-                    with st.expander(f"{idx+1}. {q_user['name']} {urgency_icon}"):
+                    
+                    desig_str = q_user.get('designation', '')
+                    name_str = f"{q_user['name']} ({desig_str})" if desig_str else q_user['name']
+                    
+                    with st.expander(f"{idx+1}. {name_str} {urgency_icon}"):
                         if q_user.get('urgent_reason'):
                             st.markdown(f":fire: <span class='urgent-text'>{q_user['urgent_reason']}</span>", unsafe_allow_html=True)
+                        if q_user.get('comment'):
+                            st.info(f"📝 Note: {q_user['comment']}")
                         
                         action_pin = st.text_input("PIN", type="password", key=f"qpin_{machine_name}_{idx}")
                         c_swap, c_leave = st.columns(2)
@@ -237,7 +265,6 @@ for i, machine_name in enumerate(MACHINES):
             elif queue:
                 show_join = True
                 
-                # Timeout Skip Button
                 if timeout_happened and len(queue) > 1:
                     st.write(f"**{queue[0]['name']} missed their turn.**")
                     if st.button(f"🚀 Skip to {queue[1]['name']}", key=f"skip_{machine_name}"):
@@ -248,38 +275,44 @@ for i, machine_name in enumerate(MACHINES):
                 with st.popover(f"Start ({queue[0]['name']})", use_container_width=True):
                     with st.form(f"st_form_{machine_name}"):
                         name = st.text_input("Name")
-                        duration = st.slider("Duration", 15, 120, 45)
-                        pin = st.text_input("PIN", type="password")
+                        desig = st.selectbox("Designation", ["PhD", "JRF/SRF", "Staff"], key=f"d1_{machine_name}")
+                        duration = st.slider("Duration", 15, 120, 45, key=f"dur1_{machine_name}")
+                        comment = st.text_input("Comment (Optional)", key=f"c1_{machine_name}")
+                        pin = st.text_input("PIN", type="password", key=f"p1_{machine_name}")
                         if st.form_submit_button("Start"):
                             if name.strip().lower() != queue[0]['name'].strip().lower():
                                 st.error(f"Only {queue[0]['name']} can start!")
                             else:
                                 queue.pop(0)
                                 end_val = get_current_time() + timedelta(minutes=duration)
-                                user_data = {"name": name, "pin": pin, "start_time": get_current_time().isoformat(), "end_time": end_val.isoformat()}
+                                user_data = {"name": name, "designation": desig, "comment": comment, "pin": pin, "start_time": get_current_time().isoformat(), "end_time": end_val.isoformat()}
                                 doc_ref.set({"current_user": user_data, "queue": queue})
                                 st.rerun()
             else:
                 with st.popover("Start Machine", use_container_width=True):
                     with st.form(f"free_st_{machine_name}"):
                         name = st.text_input("Name")
-                        duration = st.slider("Duration", 15, 120, 45)
-                        pin = st.text_input("PIN", type="password")
+                        desig = st.selectbox("Designation", ["PhD", "JRF/SRF", "Staff"], key=f"d2_{machine_name}")
+                        duration = st.slider("Duration", 15, 120, 45, key=f"dur2_{machine_name}")
+                        comment = st.text_input("Comment (Optional)", key=f"c2_{machine_name}")
+                        pin = st.text_input("PIN", type="password", key=f"p2_{machine_name}")
                         if st.form_submit_button("Start"):
                             end_val = get_current_time() + timedelta(minutes=duration)
-                            user_data = {"name": name, "pin": pin, "start_time": get_current_time().isoformat(), "end_time": end_val.isoformat()}
+                            user_data = {"name": name, "designation": desig, "comment": comment, "pin": pin, "start_time": get_current_time().isoformat(), "end_time": end_val.isoformat()}
                             doc_ref.set({"current_user": user_data, "queue": queue})
                             st.rerun()
 
             if show_join:
                 with st.popover("Join Queue", use_container_width=True):
                     q_name = st.text_input("Name", key=f"qn_{machine_name}")
+                    q_desig = st.selectbox("Designation", ["PhD", "JRF/SRF", "Staff"], key=f"qd_{machine_name}")
+                    q_comment = st.text_input("Comment (Optional)", key=f"qc_{machine_name}")
                     q_is_urgent = st.checkbox("🔥 Urgent?", key=f"qu_{machine_name}")
                     q_reason = st.text_input("Reason", key=f"qr_{machine_name}") if q_is_urgent else ""
                     q_pin = st.text_input("PIN", type="password", key=f"qp_{machine_name}")
                     
                     if st.button("Confirm", key=f"qb_{machine_name}"):
                         if q_name and q_pin:
-                            data = {"name": q_name, "pin": q_pin, "urgent": q_is_urgent, "urgent_reason": q_reason}
+                            data = {"name": q_name, "designation": q_desig, "comment": q_comment, "pin": q_pin, "urgent": q_is_urgent, "urgent_reason": q_reason}
                             doc_ref.update({"queue": firestore.ArrayUnion([data])})
                             st.rerun()
