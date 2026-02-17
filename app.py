@@ -29,7 +29,17 @@ def format_time(dt):
 # --- 4. APP INTERFACE ---
 st.set_page_config(page_title="Hostel Laundry", page_icon="🧺", layout="wide")
 st.title("🧺 ARIES Hostel Laundry Tracker")
-st.caption("Queue Priority • Urgency System • Hierarchical Swapping")
+st.caption("Live Status • Intelligent Queue • Emergency Priority")
+
+# Custom CSS to make expanders look like list items
+st.markdown("""
+<style>
+div[data-testid="stExpander"] details summary p {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+</style>
+""", unsafe_allow_html=True)
 
 cols = st.columns(len(MACHINES))
 
@@ -59,10 +69,12 @@ for i, machine_name in enumerate(MACHINES):
                 remaining = int((end_time - get_current_time()).total_seconds() / 60)
                 st.metric("Time Left", f"{remaining} min", delta_color="inverse")
                 st.caption(f"Ends: {format_time(end_time)}")
+                if current_user.get('comment'):
+                    st.info(f"📝 {current_user['comment']}")
                 
                 # SETTINGS (Power Cut / Stop)
-                with st.expander("⚙️ Manage Session"):
-                    pin_input = st.text_input("Enter PIN or Master Key", type="password", key=f"pin_{machine_name}")
+                with st.expander("⚙️ Admin / User Settings"):
+                    pin_input = st.text_input("PIN", type="password", key=f"pin_{machine_name}")
                     add_time = st.number_input("Add Mins", 5, 60, 15, step=5, key=f"time_{machine_name}")
                     
                     c1, c2 = st.columns(2)
@@ -84,111 +96,135 @@ for i, machine_name in enumerate(MACHINES):
             else:
                 st.success("🟢 AVAILABLE")
                 if queue:
-                    st.info(f"Reserved for: **{queue[0]['name']}**")
+                    st.warning(f"Reserved for: **{queue[0]['name']}**")
                 else:
-                    st.write("Free for everyone.")
+                    st.write("Free to use.")
 
-            # --- QUEUE DISPLAY & HIERARCHICAL SWAPPING ---
+            # --- QUEUE DISPLAY (CLICKABLE LIST) ---
             if queue:
                 st.divider()
-                st.write(f"**Queue ({len(queue)})**")
+                st.write(f"**Queue ({len(queue)}) - Click name to swap**")
                 
-                # Expandable Control Panel for Swapping
-                with st.expander("🔄 Swap / Remove User"):
-                    manage_pin = st.text_input("Enter YOUR PIN to Swap/Leave", type="password", key=f"qpin_{machine_name}")
+                for idx, q_user in enumerate(queue):
+                    # Build Label
+                    urgency_icon = "🔥" if q_user.get('urgent') else ""
+                    label = f"{idx+1}. {q_user['name']} {urgency_icon}"
                     
-                    for idx, q_user in enumerate(queue):
-                        # Display User Info
-                        urgency_icon = "🔥" if q_user.get('urgent') else ""
-                        row_text = f"**{idx+1}. {urgency_icon} {q_user['name']}**"
+                    # THE EXPANDER IS THE "CLICKABLE NAME"
+                    with st.expander(label):
+                        st.write(f"**Role:** {q_user['designation']}")
                         if q_user.get('urgent_reason'):
-                            row_text += f" - *\"{q_user['urgent_reason']}\"*"
-                        st.markdown(row_text)
-
-                        # ACTION BUTTONS FOR EACH USER
-                        c_swap, c_remove = st.columns([2, 1])
+                            st.error(f"🚨 **Urgency:** {q_user['urgent_reason']}")
+                        if q_user.get('comment'):
+                            st.info(f"📝 **Note:** {q_user['comment']}")
+                            
+                        # CONTROLS
+                        st.caption("Enter YOUR PIN to perform actions:")
+                        action_pin = st.text_input("PIN", type="password", key=f"qpin_{machine_name}_{idx}")
                         
-                        # Swap Button (Only if not the last person)
+                        col_swap, col_leave = st.columns(2)
+                        
+                        # Swap Logic (Let next person pass)
                         if idx < len(queue) - 1:
-                            next_user = queue[idx+1]
-                            if c_swap.button(f"▼ Let {next_user['name']} Pass", key=f"swap_{machine_name}_{idx}"):
-                                # Verify PIN of the CURRENT user (idx) trying to be nice
-                                if manage_pin == q_user['pin'] or manage_pin == MASTER_PIN:
+                            next_person = queue[idx+1]['name']
+                            if col_swap.button(f"▼ Let {next_person} Pass", key=f"swap_{machine_name}_{idx}"):
+                                if action_pin == q_user['pin'] or action_pin == MASTER_PIN:
                                     queue[idx], queue[idx+1] = queue[idx+1], queue[idx]
                                     doc_ref.update({"queue": queue})
                                     st.rerun()
                                 else:
-                                    st.error("Wrong PIN! You can only swap yourself down.")
+                                    st.error("Wrong PIN")
                         
-                        # Remove Button (Self or Admin)
-                        if c_remove.button("❌", key=f"rem_{machine_name}_{idx}", help="Remove from queue"):
-                             if manage_pin == q_user['pin'] or manage_pin == MASTER_PIN:
-                                 queue.pop(idx)
-                                 doc_ref.update({"queue": queue})
-                                 st.rerun()
-                             else:
-                                 st.error("Wrong PIN")
-                        st.divider()
+                        if col_leave.button("❌ Leave Queue", key=f"leave_{machine_name}_{idx}"):
+                            if action_pin == q_user['pin'] or action_pin == MASTER_PIN:
+                                queue.pop(idx)
+                                doc_ref.update({"queue": queue})
+                                st.rerun()
+                            else:
+                                st.error("Wrong PIN")
 
-            # --- START / JOIN FORM ---
+            # --- ACTION BUTTONS (START / JOIN) ---
             st.divider()
             
-            # Logic: If queue exists, only #1 can start.
+            # Scenario 1: Machine Running -> Show JOIN QUEUE
+            # Scenario 2: Machine Free, Queue Empty -> Show START
+            # Scenario 3: Machine Free, Queue Exists -> Show START (Restricted) AND JOIN QUEUE
+            
+            show_start = False
+            show_join = False
+            start_label = "Start Machine"
+            
             if is_running:
-                btn_text = "Join Queue"
-                can_start = False
+                show_join = True
             elif queue:
-                btn_text = f"Start (Only {queue[0]['name']})"
-                can_start = True
+                show_start = True
+                show_join = True
+                start_label = f"Start ({queue[0]['name']} Only)"
             else:
-                btn_text = "Start Machine"
-                can_start = True
+                show_start = True
+                start_label = "Start Machine"
 
-            with st.popover(btn_text):
-                with st.form(f"form_{machine_name}"):
-                    name = st.text_input("Name")
-                    desig = st.selectbox("Designation", ["JRF/SRF", "PhD", "Staff"], key=f"d_{machine_name}")
-                    
-                    if can_start:
-                        duration = st.slider("Duration", 15, 120, 45, key=f"t_{machine_name}")
-                        is_urgent = False
-                        urgent_reason = ""
-                    else:
-                        duration = 0
-                        is_urgent = st.checkbox("🔥 I have an Urgent need!")
-                        urgent_reason = st.text_input("Reason for Urgency", placeholder="e.g. Flight in 2 hours") if is_urgent else ""
-                        
-                    pin = st.text_input("Set 4-digit PIN", max_chars=4, type="password", key=f"p_{machine_name}")
-                    submitted = st.form_submit_button("Confirm")
+            # Create columns if we need both buttons
+            if show_start and show_join:
+                b_col1, b_col2 = st.columns(2)
+            else:
+                b_col1, b_col2 = st.container(), st.container()
 
-                    if submitted and name and pin:
-                        # VALIDATION: Check if it's #1's turn
-                        if can_start and queue:
-                            # Simple Name Check (Case Insensitive)
-                            if name.strip().lower() != queue[0]['name'].strip().lower():
-                                st.error(f"❌ Rejected! It is {queue[0]['name']}'s turn.")
-                                st.stop()
-                            else:
-                                queue.pop(0) # Valid user, remove from queue head
-
-                        user_data = {
-                            "name": name,
-                            "designation": desig,
-                            "pin": pin,
-                            "urgent": is_urgent,
-                            "urgent_reason": urgent_reason,
-                            "timestamp": get_current_time().isoformat()
-                        }
-
-                        if is_running:
-                            doc_ref.update({"queue": firestore.ArrayUnion([user_data])})
-                            st.toast("Added to Queue!")
-                        else:
-                            end_time_val = get_current_time() + timedelta(minutes=duration)
-                            user_data["start_time"] = get_current_time().isoformat()
-                            user_data["end_time"] = end_time_val.isoformat()
+            # --- BUTTON 1: START MACHINE ---
+            if show_start:
+                with b_col1:
+                    with st.popover(start_label, use_container_width=True):
+                        with st.form(f"start_form_{machine_name}"):
+                            st.write("### Start Machine")
+                            name = st.text_input("Name")
+                            desig = st.selectbox("Designation", ["JRF/SRF", "PhD", "Staff"], key=f"sd_{machine_name}")
+                            duration = st.slider("Duration (mins)", 15, 120, 45, key=f"st_{machine_name}")
+                            comment = st.text_input("Comment (Optional)", placeholder="e.g. Bed sheets", key=f"sc_{machine_name}")
+                            pin = st.text_input("Set PIN", max_chars=4, type="password", key=f"sp_{machine_name}")
                             
-                            doc_ref.set({"current_user": user_data, "queue": queue})
-                            st.toast("Machine Started!")
-                        
-                        st.rerun()
+                            if st.form_submit_button("Start Now"):
+                                # Verification if queue exists
+                                if queue:
+                                    if name.strip().lower() != queue[0]['name'].strip().lower():
+                                        st.error(f"❌ Only {queue[0]['name']} can start!")
+                                        st.stop()
+                                    else:
+                                        queue.pop(0) # Remove from queue
+
+                                end_time_val = get_current_time() + timedelta(minutes=duration)
+                                user_data = {
+                                    "name": name, "designation": desig, "pin": pin, 
+                                    "comment": comment, "start_time": get_current_time().isoformat(),
+                                    "end_time": end_time_val.isoformat()
+                                }
+                                doc_ref.set({"current_user": user_data, "queue": queue})
+                                st.rerun()
+
+            # --- BUTTON 2: JOIN QUEUE ---
+            if show_join:
+                with b_col2:
+                    with st.popover("Join Queue", use_container_width=True):
+                        with st.form(f"join_form_{machine_name}"):
+                            st.write("### Join Queue")
+                            name = st.text_input("Name")
+                            desig = st.selectbox("Designation", ["JRF/SRF", "PhD", "Staff"], key=f"jd_{machine_name}")
+                            comment = st.text_input("Comment (Optional)", placeholder="e.g. White clothes", key=f"jc_{machine_name}")
+                            
+                            # Urgency Logic
+                            is_urgent = st.checkbox("🔥 Urgent?")
+                            urgent_reason = ""
+                            if is_urgent:
+                                urgent_reason = st.text_input("Reason", placeholder="Flight in 3 hours...")
+
+                            pin = st.text_input("Set PIN", max_chars=4, type="password", key=f"jp_{machine_name}")
+                            
+                            if st.form_submit_button("Join Queue"):
+                                if name and pin:
+                                    user_data = {
+                                        "name": name, "designation": desig, "pin": pin,
+                                        "comment": comment, "urgent": is_urgent,
+                                        "urgent_reason": urgent_reason,
+                                        "timestamp": get_current_time().isoformat()
+                                    }
+                                    doc_ref.update({"queue": firestore.ArrayUnion([user_data])})
+                                    st.rerun()
