@@ -292,7 +292,7 @@ for i, machine_name in enumerate(MACHINES):
                 with st.popover(f"Start ({queue[0]['name']})", use_container_width=True):
                     with st.form(f"st_form_{machine_name}"):
                         name = st.text_input("Name")
-                        desig = st.selectbox("Designation", ["PhD", "PDF", "JRF/SRF", "Staff"], key=f"d1_{machine_name}")
+                        desig = st.selectbox("Designation", ["PhD", "PDF", "Project Student", "Visitor"], key=f"d1_{machine_name}")
                         duration = st.slider("Duration", 15, 120, 45, key=f"dur1_{machine_name}")
                         comment = st.text_input("Comment (Optional)", key=f"c1_{machine_name}")
                         pin = st.text_input("PIN", type="password", key=f"p1_{machine_name}")
@@ -310,7 +310,7 @@ for i, machine_name in enumerate(MACHINES):
                 with st.popover("Start Machine", use_container_width=True):
                     with st.form(f"free_st_{machine_name}"):
                         name = st.text_input("Name")
-                        desig = st.selectbox("Designation", ["PhD", "Project Student", "Visitor"], key=f"d2_{machine_name}")
+                        desig = st.selectbox("Designation", ["PhD","PDF","Project Student", "Visitor"], key=f"d2_{machine_name}")
                         duration = st.slider("Duration", 15, 120, 45, key=f"dur2_{machine_name}")
                         comment = st.text_input("Comment (Optional)", key=f"c2_{machine_name}")
                         pin = st.text_input("PIN", type="password", key=f"p2_{machine_name}")
@@ -324,7 +324,7 @@ for i, machine_name in enumerate(MACHINES):
             if show_join:
                 with st.popover("Join Queue", use_container_width=True):
                     q_name = st.text_input("Name", key=f"qn_{machine_name}")
-                    q_desig = st.selectbox("Designation", ["PhD", "Project Student", "Visitor"], key=f"qd_{machine_name}")
+                    q_desig = st.selectbox("Designation", ["PhD", "PDF", "Project Student", "Visitor"], key=f"qd_{machine_name}")
                     q_comment = st.text_input("Comment (Optional)", key=f"qc_{machine_name}")
                     q_is_urgent = st.checkbox("🔥 Urgent?", key=f"qu_{machine_name}")
                     q_reason = st.text_input("Reason", key=f"qr_{machine_name}") if q_is_urgent else ""
