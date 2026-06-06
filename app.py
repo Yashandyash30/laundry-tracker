@@ -121,7 +121,10 @@ if page == "Announcements":
     st.markdown("<h2 style='margin-top: -50px; margin-bottom: -15px;'>📢 Announcements</h2>", unsafe_allow_html=True)
     st.write("<br>", unsafe_allow_html=True)
     
-    auth_pin = st.text_input("Master PIN", type="password")
+    with st.form("admin_auth"):
+        auth_pin = st.text_input("Master PIN", type="password")
+        auth_submit = st.form_submit_button("Enter")
+        
     if auth_pin == MASTER_PIN:
         target_hostel = st.selectbox("Target Hostel", ["Kritika Hostel", "Rohini Hostel", "Both"])
         msg = st.text_area("Announcement Message")
@@ -448,7 +451,9 @@ for i, machine_name in enumerate(MACHINES):
                                 user_data = {"name": name, "designation": desig, "comment": comment, "pin": pin, "start_time": get_current_time().isoformat(), "end_time": end_val.isoformat(), "timeout_alert_sent": False}
                                 doc_ref.set({"current_user": user_data, "queue": queue})
                                 add_log(DB_COLLECTION, machine_name, name, desig, duration)
-                                send_telegram(f"🧺 *{machine_name} Started*\n👤 User: {name}\n⏱ Duration: {duration} mins", selected_hostel)
+                                msg = f"🧺 *{machine_name} Started*\n👤 User: {name}\n⏱ Duration: {duration} mins"
+                                if comment.strip(): msg += f"\n📝 *Note:* _{comment.strip()}_"
+                                send_telegram(msg, selected_hostel)
                                 st.rerun()
             else:
                 with st.popover("Start Machine", use_container_width=True):
@@ -466,7 +471,9 @@ for i, machine_name in enumerate(MACHINES):
                             user_data = {"name": name, "designation": desig, "comment": comment, "pin": pin, "start_time": get_current_time().isoformat(), "end_time": end_val.isoformat(), "timeout_alert_sent": False}
                             doc_ref.set({"current_user": user_data, "queue": queue})
                             add_log(DB_COLLECTION, machine_name, name, desig, duration)
-                            send_telegram(f"🧺 *{machine_name} Started*\n👤 User: {name}\n⏱ Duration: {duration} mins", selected_hostel)
+                            msg = f"🧺 *{machine_name} Started*\n👤 User: {name}\n⏱ Duration: {duration} mins"
+                            if comment.strip(): msg += f"\n📝 *Note:* _{comment.strip()}_"
+                            send_telegram(msg, selected_hostel)
                             st.rerun()
 
             if show_join:
@@ -486,7 +493,8 @@ for i, machine_name in enumerate(MACHINES):
                                 data = {"name": q_name, "designation": q_desig, "comment": q_comment, "pin": q_pin, "urgent": q_is_urgent, "urgent_reason": q_reason}
                                 doc_ref.update({"queue": firestore.ArrayUnion([data])})
                                 
-                                alert = f"📝 *Queue Update*\n{q_name} joined queue for {machine_name}."
+                                alert = f"📝 *Queue Update*\n👤 User: {q_name} joined queue for {machine_name}."
+                                if q_comment.strip(): alert += f"\n📝 *Note:* _{q_comment.strip()}_"
                                 if q_is_urgent: alert += f"\n🔥 *URGENT*: {q_reason}"
                                 send_telegram(alert, selected_hostel)
                                 st.rerun()
@@ -533,6 +541,15 @@ custom_js = """
                     }
                 });
                 submitBtn.disabled = !isValid;
+                if (isValid) {
+                    submitBtn.style.backgroundColor = '#28a745'; // Green
+                    submitBtn.style.color = 'white';
+                    submitBtn.style.borderColor = '#28a745';
+                } else {
+                    submitBtn.style.backgroundColor = '';
+                    submitBtn.style.color = '';
+                    submitBtn.style.borderColor = '';
+                }
             };
             
             // Initial check
