@@ -111,6 +111,45 @@ if 'machine_states' not in st.session_state:
 # --- 5. APP INTERFACE ---
 st.set_page_config(page_title="Hostel Laundry", page_icon="🧺", layout="wide")
 
+with st.sidebar:
+    st.write("### 🧭 Navigation")
+    page = st.radio("Go to:", ["Dashboard", "Usage Logs"], label_visibility="collapsed")
+    st.write("---")
+
+if page == "Usage Logs":
+    st.markdown("<h2 style='margin-top: -50px; margin-bottom: -15px;'>📜 Usage Logs</h2>", unsafe_allow_html=True)
+    st.write("<br>", unsafe_allow_html=True)
+    
+    log_hostel = st.radio("**Select Hostel to view logs:**", ["Kritika Hostel", "Rohini Hostel"], horizontal=True)
+    limit_choice = st.selectbox("Show last N logs:", [50, 100, 500, "All"])
+    
+    if log_hostel:
+        hostel_col = "machines_kritika" if log_hostel == "Kritika Hostel" else "machines_rohini"
+        try:
+            if limit_choice == "All":
+                logs_ref = db.collection(f"{hostel_col}_logs").order_by("timestamp", direction=firestore.Query.DESCENDING)
+            else:
+                logs_ref = db.collection(f"{hostel_col}_logs").order_by("timestamp", direction=firestore.Query.DESCENDING).limit(limit_choice)
+                
+            logs = [doc.to_dict() for doc in logs_ref.stream()]
+            if logs:
+                formatted_logs = []
+                for log in logs:
+                    dt_obj = datetime.fromisoformat(log.get('timestamp', get_current_time().isoformat()))
+                    formatted_logs.append({
+                        "Date & Time": dt_obj.strftime("%Y-%m-%d %I:%M %p"),
+                        "Machine": log.get("machine", ""),
+                        "User": log.get("user", ""),
+                        "Designation": log.get("designation", ""),
+                        "Duration (mins)": log.get("duration_mins", "")
+                    })
+                st.dataframe(formatted_logs, use_container_width=True, hide_index=True)
+            else:
+                st.info("No logs found for this hostel.")
+        except Exception as e:
+            st.error(f"Could not load logs: {e}")
+    st.stop()
+
 st.markdown("<h2 style='margin-top: -50px; margin-bottom: -15px;'>🧺 ARIES Laundry Tracker</h2>", unsafe_allow_html=True)
 st.caption("Live Status • Telegram Alerts • Browser Notifications")
 
@@ -389,26 +428,3 @@ for i, machine_name in enumerate(MACHINES):
                             if q_is_urgent: alert += f"\n🔥 *URGENT*: {q_reason}"
                             send_telegram(alert, selected_hostel)
                             st.rerun()
-
-if selected_hostel:
-    st.divider()
-    with st.expander("📜 Usage Logs (Last 50 Entries)"):
-        try:
-            logs_ref = db.collection(f"{DB_COLLECTION}_logs").order_by("timestamp", direction=firestore.Query.DESCENDING).limit(50)
-            logs = [doc.to_dict() for doc in logs_ref.stream()]
-            if logs:
-                formatted_logs = []
-                for log in logs:
-                    dt_obj = datetime.fromisoformat(log.get('timestamp', get_current_time().isoformat()))
-                    formatted_logs.append({
-                        "Date & Time": dt_obj.strftime("%Y-%m-%d %I:%M %p"),
-                        "Machine": log.get("machine", ""),
-                        "User": log.get("user", ""),
-                        "Designation": log.get("designation", ""),
-                        "Duration (mins)": log.get("duration_mins", "")
-                    })
-                st.dataframe(formatted_logs, use_container_width=True, hide_index=True)
-            else:
-                st.info("No logs found for this hostel.")
-        except Exception as e:
-            st.error(f"Could not load logs: {e}")
