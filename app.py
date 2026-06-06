@@ -5,6 +5,7 @@ from firebase_admin import credentials, firestore
 from datetime import datetime, timedelta
 import pytz
 import requests
+import pandas as pd
 from streamlit_autorefresh import st_autorefresh
 
 # --- 1. SETUP FIREBASE ---
@@ -113,8 +114,42 @@ st.set_page_config(page_title="Hostel Laundry", page_icon="🧺", layout="wide")
 
 with st.sidebar:
     st.write("### 🧭 Navigation")
-    page = st.radio("Go to:", ["Dashboard", "Usage Logs"], label_visibility="collapsed")
+    page = st.radio("Go to:", ["Dashboard", "Usage Logs", "Announcements"], label_visibility="collapsed")
     st.write("---")
+
+if page == "Announcements":
+    st.markdown("<h2 style='margin-top: -50px; margin-bottom: -15px;'>📢 Announcements</h2>", unsafe_allow_html=True)
+    st.write("<br>", unsafe_allow_html=True)
+    
+    auth_pin = st.text_input("Master PIN", type="password")
+    if auth_pin == MASTER_PIN:
+        target_hostel = st.selectbox("Target Hostel", ["Kritika Hostel", "Rohini Hostel", "Both"])
+        msg = st.text_area("Announcement Message")
+        
+        if st.button("Publish"):
+            if target_hostel in ["Kritika Hostel", "Both"]:
+                db.collection("announcements").document("Kritika Hostel").set({"message": msg, "timestamp": get_current_time().isoformat()})
+            if target_hostel in ["Rohini Hostel", "Both"]:
+                db.collection("announcements").document("Rohini Hostel").set({"message": msg, "timestamp": get_current_time().isoformat()})
+            st.success("Published!")
+            
+        st.write("---")
+        st.write("### Current Announcements")
+        try:
+            k_doc = db.collection("announcements").document("Kritika Hostel").get()
+            r_doc = db.collection("announcements").document("Rohini Hostel").get()
+            st.write(f"**Kritika:** {k_doc.to_dict().get('message') if k_doc.exists else 'None'}")
+            st.write(f"**Rohini:** {r_doc.to_dict().get('message') if r_doc.exists else 'None'}")
+            
+            if st.button("Clear All Announcements"):
+                db.collection("announcements").document("Kritika Hostel").delete()
+                db.collection("announcements").document("Rohini Hostel").delete()
+                st.rerun()
+        except Exception:
+            pass
+    elif auth_pin:
+        st.error("Incorrect PIN")
+    st.stop()
 
 if page == "Usage Logs":
     st.markdown("<h2 style='margin-top: -50px; margin-bottom: -15px;'>📜 Usage Logs</h2>", unsafe_allow_html=True)
@@ -169,6 +204,15 @@ if not selected_hostel:
         request_permission_button()
     st.stop()
 
+try:
+    announcement_doc = db.collection("announcements").document(selected_hostel).get()
+    if announcement_doc.exists:
+        ann_data = announcement_doc.to_dict()
+        if ann_data and ann_data.get("message"):
+            st.warning(f"📢 **Announcement:** {ann_data['message']}")
+except Exception:
+    pass
+
 with st.sidebar:
     st.success(f"📍 **Current:** {selected_hostel}")
     st.write("---")
@@ -187,6 +231,16 @@ st.markdown("""
 <style>
 div[data-testid="stExpander"] details summary p { font-size: 1.1rem; font-weight: 600; }
 .urgent-text { color: #FF4B4B; font-weight: bold; }
+/* Hide 'Press Enter to apply' */
+div[data-testid="InputInstructions"] { display: none !important; }
+/* Input animations for mobile */
+.stTextInput input, .stNumberInput input {
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.stTextInput input:focus, .stNumberInput input:focus {
+    box-shadow: 0 0 8px rgba(255, 75, 75, 0.4) !important;
+    border-color: #FF4B4B !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -428,3 +482,43 @@ for i, machine_name in enumerate(MACHINES):
                             if q_is_urgent: alert += f"\n🔥 *URGENT*: {q_reason}"
                             send_telegram(alert, selected_hostel)
                             st.rerun()
+
+# --- ACCORDION JS ---
+accordion_js = """
+<script>
+    const doc = window.parent.document;
+    const details = doc.querySelectorAll('div[data-testid="stExpander"] details');
+    
+    details.forEach((targetDetail, index) => {
+        // Enforce accordion behavior natively in modern browsers
+        targetDetail.setAttribute('name', 'laundry_accordion');
+        
+        // Restore state
+        const savedIndex = sessionStorage.getItem('open_expander');
+        if (savedIndex !== null) {
+            if (parseInt(savedIndex) === index) {
+                targetDetail.setAttribute('open', '');
+            } else {
+                targetDetail.removeAttribute('open');
+            }
+        }
+        
+        // Save state on click
+        if (!targetDetail.hasAttribute('data-accordion-bound')) {
+            targetDetail.setAttribute('data-accordion-bound', 'true');
+            targetDetail.addEventListener('click', () => {
+                setTimeout(() => {
+                    if (targetDetail.hasAttribute('open')) {
+                        sessionStorage.setItem('open_expander', index);
+                    } else {
+                        if (sessionStorage.getItem('open_expander') == index) {
+                            sessionStorage.removeItem('open_expander');
+                        }
+                    }
+                }, 10);
+            });
+        }
+    });
+</script>
+"""
+components.html(accordion_js, height=0)
