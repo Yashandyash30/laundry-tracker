@@ -96,17 +96,33 @@ if 'machine_states' not in st.session_state:
     st.session_state['machine_states'] = {}
 
 # --- 5. APP INTERFACE ---
-st.set_page_config(page_title="Hostel Laundry", page_icon="🧺", layout="wide")
+st.set_page_config(page_title="Hostel Laundry", page_icon="🧺", layout="centered")
+
+st.title("🧺 ARIES Laundry Tracker")
+st.caption("Live Status • Telegram Alerts • Browser Notifications")
+
+# Move location selector to the main screen to prevent accidental wrong hostel selection
+st.markdown("### 📍 Select Your Hostel")
+selected_hostel = st.radio(
+    "Choose your location:", 
+    ["Kritika Hostel", "Rohini Hostel"], 
+    index=None, 
+    horizontal=True,
+    key="hostel_selector"
+)
+
+if not selected_hostel:
+    st.info("👆 Please select your hostel above to view the laundry machines.")
+    with st.sidebar:
+        st.write("### ⚙️ Settings")
+        request_permission_button()
+    st.stop()
 
 with st.sidebar:
-    st.write("### 📍 Location")
-    selected_hostel = st.radio("Choose your location:", ["Kritika Hostel", "Rohini Hostel"])
+    st.success(f"📍 **Current:** {selected_hostel}")
     st.write("---")
     st.write("### ⚙️ Settings")
     request_permission_button()
-
-st.title(f"🧺 ARIES Laundry Tracker - {selected_hostel}")
-st.caption("Live Status • Telegram Alerts • Browser Notifications")
 
 if selected_hostel == "Kritika Hostel":
     DB_COLLECTION = "machines_kritika"
@@ -120,13 +136,25 @@ st.markdown("""
 <style>
 div[data-testid="stExpander"] details summary p { font-size: 1.1rem; font-weight: 600; }
 .urgent-text { color: #FF4B4B; font-weight: bold; }
+/* Mobile optimizations */
+@media (max-width: 768px) {
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 2px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        padding-right: 10px !important;
+        padding-left: 10px !important;
+        white-space: pre-wrap !important;
+    }
+}
 </style>
 """, unsafe_allow_html=True)
 
-cols = st.columns(len(MACHINES))
+# Use tabs instead of columns for better mobile experience
+tabs = st.tabs(MACHINES)
 
 for i, machine_name in enumerate(MACHINES):
-    with cols[i]:
+    with tabs[i]:
         with st.container(border=True):
             st.subheader(f"{machine_name}")
             
