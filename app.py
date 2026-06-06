@@ -96,7 +96,7 @@ if 'machine_states' not in st.session_state:
     st.session_state['machine_states'] = {}
 
 # --- 5. APP INTERFACE ---
-st.set_page_config(page_title="Hostel Laundry", page_icon="🧺", layout="centered")
+st.set_page_config(page_title="Hostel Laundry", page_icon="🧺", layout="wide")
 
 st.title("🧺 ARIES Laundry Tracker")
 st.caption("Live Status • Telegram Alerts • Browser Notifications")
@@ -136,25 +136,14 @@ st.markdown("""
 <style>
 div[data-testid="stExpander"] details summary p { font-size: 1.1rem; font-weight: 600; }
 .urgent-text { color: #FF4B4B; font-weight: bold; }
-/* Mobile optimizations */
-@media (max-width: 768px) {
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 2px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        padding-right: 10px !important;
-        padding-left: 10px !important;
-        white-space: pre-wrap !important;
-    }
-}
 </style>
 """, unsafe_allow_html=True)
 
-# Use tabs instead of columns for better mobile experience
-tabs = st.tabs(MACHINES)
+# Display machines side-by-side on desktop, auto-stacks vertically on mobile
+cols = st.columns(len(MACHINES))
 
 for i, machine_name in enumerate(MACHINES):
-    with tabs[i]:
+    with cols[i]:
         with st.container(border=True):
             st.subheader(f"{machine_name}")
             
