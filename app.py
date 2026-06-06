@@ -244,10 +244,7 @@ if st.session_state.get('active_action'):
     
     doc_ref = db.collection(DB_COLLECTION).document(machine_name)
     doc_snap = doc_ref.get()
-    if not doc_snap.exists:
-        st.error("Machine not found.")
-        st.stop()
-    m_data = doc_snap.to_dict()
+    m_data = doc_snap.to_dict() if doc_snap.exists else {}
     queue = m_data.get('queue', [])
     
     with st.container(border=True):
@@ -259,7 +256,7 @@ if st.session_state.get('active_action'):
             q_reason = st.text_input("Reason") if q_is_urgent else ""
             q_pin = st.text_input("PIN *", type="password")
             
-            submitted = st.button("Confirm", use_container_width=True)
+            submitted = st.button("Confirm", use_container_width=True, type="primary")
         else:
             name = st.text_input("Name *")
             desig = st.selectbox("Designation *", ["PhD", "PDF", "Project Student", "Visitor"])
@@ -273,7 +270,7 @@ if st.session_state.get('active_action'):
             comment = st.text_input("Comment (Optional)", placeholder="e.g., Handle with care")
             pin = st.text_input("PIN *", type="password")
             
-            submitted = st.button("Start", use_container_width=True)
+            submitted = st.button("Start", use_container_width=True, type="primary")
 
     if st.button("✖ Cancel / Go Back", use_container_width=True):
         st.session_state['active_action'] = None
@@ -594,45 +591,6 @@ custom_js = """
 
     // --- COSMETIC BUTTON COLOR VALIDATION ---
     const colorObserver = new MutationObserver(() => {
-        // Virtual Page Buttons
-        const virtBtns = Array.from(doc.querySelectorAll('button')).filter(b => b.innerText.includes('Confirm') || b.innerText.includes('Start'));
-        virtBtns.forEach(btn => {
-            const container = btn.closest('div[data-testid="stVerticalBlockBorderWrapper"]') || btn.closest('div[data-testid="stVerticalBlock"]');
-            if (container && !container.hasAttribute('data-color-bound')) {
-                container.setAttribute('data-color-bound', 'true');
-                const textInputs = container.querySelectorAll('input[type="text"], input[type="password"]');
-                const buttons = Array.from(container.querySelectorAll('button')).filter(b => b.innerText.includes('Confirm') || b.innerText.includes('Start'));
-                
-                if (buttons.length > 0) {
-                    const checkInputs = () => {
-                        let isValid = true;
-                        textInputs.forEach(inp => {
-                            const wrapper = inp.closest('div[data-testid="stTextInput"]');
-                            if (wrapper) {
-                                const label = wrapper.querySelector('label');
-                                if (label && label.innerText.includes('*') && inp.value.trim() === '') {
-                                    isValid = false;
-                                }
-                            }
-                        });
-                        buttons.forEach(submitBtn => {
-                            if (isValid) {
-                                submitBtn.style.setProperty('background-color', '#28a745', 'important');
-                                submitBtn.style.setProperty('color', 'white', 'important');
-                                submitBtn.style.setProperty('border-color', '#28a745', 'important');
-                            } else {
-                                submitBtn.style.removeProperty('background-color');
-                                submitBtn.style.removeProperty('color');
-                                submitBtn.style.removeProperty('border-color');
-                            }
-                        });
-                    };
-                    checkInputs();
-                    textInputs.forEach(inp => inp.addEventListener('input', checkInputs));
-                }
-            }
-        });
-
         // Expander Buttons
         doc.querySelectorAll('div[data-testid="stExpander"]').forEach(exp => {
             if (!exp.hasAttribute('data-color-bound')) {
