@@ -566,7 +566,7 @@ custom_js = """
                 form.setAttribute('data-validation-bound', 'true');
                 
                 const textInputs = form.querySelectorAll('input[type="text"], input[type="password"]');
-                const submitBtn = form.querySelector('button[type="submit"], button[kind="primaryFormSubmit"], button[kind="secondaryFormSubmit"], button[kind="formSubmit"]');
+                const submitBtn = form.querySelector('button');
                 
                 if (submitBtn) {
                     const checkInputs = () => {
@@ -634,27 +634,59 @@ custom_js = """
                 }
             }
         });
+
+        // 3. DYNAMIC CUSTOM DURATION
+        doc.querySelectorAll('div[data-testid="stForm"]').forEach(form => {
+            const selectboxes = form.querySelectorAll('div[data-testid="stSelectbox"]');
+            let durationSelectWrapper = null;
+            selectboxes.forEach(wrapper => {
+                const label = wrapper.querySelector('label');
+                if (label && label.innerText.includes('Duration')) {
+                    durationSelectWrapper = wrapper;
+                }
+            });
+            
+            const numberInputs = form.querySelectorAll('div[data-testid="stNumberInput"]');
+            let customDurWrapper = null;
+            numberInputs.forEach(wrapper => {
+                const label = wrapper.querySelector('label');
+                if (label && label.innerText.includes('Custom Duration')) {
+                    customDurWrapper = wrapper;
+                }
+            });
+            
+            if (durationSelectWrapper && customDurWrapper) {
+                if (durationSelectWrapper.innerText.includes('Custom')) {
+                    customDurWrapper.style.display = 'block';
+                } else {
+                    customDurWrapper.style.display = 'none';
+                }
+            }
+        });
     });
 
     observer.observe(doc.body, { childList: true, subtree: true });
 <style>
-/* CSS Hack for st.popover bottom sheet on mobile to prevent keyboard overlap */
+/* CSS Hack for st.popover full-screen overlay on mobile */
 @media (max-width: 768px) {
     div[data-testid="stPopoverBody"] {
         position: fixed !important;
+        top: 0 !important;
         bottom: 0 !important;
-        top: auto !important;
         left: 0 !important;
         right: 0 !important;
         width: 100vw !important;
         max-width: 100vw !important;
-        border-radius: 20px 20px 0 0 !important;
-        max-height: 85vh !important;
+        height: 100vh !important;
+        max-height: 100vh !important;
+        border-radius: 0 !important;
         overflow-y: auto !important;
         padding-bottom: 50px !important;
         z-index: 999999 !important;
         transform: none !important;
-        box-shadow: 0px -5px 15px rgba(0,0,0,0.3) !important;
+        background-color: var(--background-color) !important;
+        margin: 0 !important;
+        border: none !important;
     }
 }
 </style>
