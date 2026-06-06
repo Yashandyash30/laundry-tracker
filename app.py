@@ -145,10 +145,25 @@ if page == "Announcements":
         try:
             k_doc = db.collection("announcements").document("Kritika Hostel").get()
             r_doc = db.collection("announcements").document("Rohini Hostel").get()
-            st.write(f"**Kritika:** {k_doc.to_dict().get('message') if k_doc.exists else 'None'}")
-            st.write(f"**Rohini:** {r_doc.to_dict().get('message') if r_doc.exists else 'None'}")
             
-            if st.button("Clear All Announcements"):
+            c1, c2 = st.columns([4, 1])
+            with c1:
+                st.write(f"**Kritika:** {k_doc.to_dict().get('message') if k_doc.exists else 'None'}")
+            with c2:
+                if k_doc.exists and st.button("Clear Kritika", use_container_width=True):
+                    db.collection("announcements").document("Kritika Hostel").delete()
+                    st.rerun()
+                    
+            c1, c2 = st.columns([4, 1])
+            with c1:
+                st.write(f"**Rohini:** {r_doc.to_dict().get('message') if r_doc.exists else 'None'}")
+            with c2:
+                if r_doc.exists and st.button("Clear Rohini", use_container_width=True):
+                    db.collection("announcements").document("Rohini Hostel").delete()
+                    st.rerun()
+            
+            st.write("<br>", unsafe_allow_html=True)
+            if (k_doc.exists or r_doc.exists) and st.button("Clear All Announcements"):
                 db.collection("announcements").document("Kritika Hostel").delete()
                 db.collection("announcements").document("Rohini Hostel").delete()
                 st.rerun()
