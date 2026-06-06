@@ -250,7 +250,7 @@ if st.session_state.get('active_action'):
     m_data = doc_snap.to_dict()
     queue = m_data.get('queue', [])
     
-    with st.form(f"action_form_{machine_name}"):
+    with st.container(border=True):
         if act_type == 'Join Queue':
             q_name = st.text_input("Name *")
             q_desig = st.selectbox("Designation *", ["PhD", "PDF", "Project Student", "Visitor"])
@@ -258,15 +258,24 @@ if st.session_state.get('active_action'):
             q_is_urgent = st.checkbox("🔥 Urgent?")
             q_reason = st.text_input("Reason") if q_is_urgent else ""
             q_pin = st.text_input("PIN *", type="password")
-            submitted = st.form_submit_button("Confirm", use_container_width=True)
+            
+            is_valid = bool(q_name.strip() and q_pin.strip())
+            submitted = st.button("Confirm", use_container_width=True, disabled=not is_valid, type="primary" if is_valid else "secondary")
         else:
             name = st.text_input("Name *")
             desig = st.selectbox("Designation *", ["PhD", "PDF", "Project Student", "Visitor"])
-            dur_choice = st.selectbox("Duration (mins) *", ["30", "45", "60", "90", "120", "Custom"], index=1)
-            custom_dur = st.number_input("Custom Duration (mins)", min_value=15, max_value=200, value=45, step=5)
+            
+            dur_choice = st.selectbox("Duration (mins) *", ["30", "45", "60", "90", "120", "Custom (Manual Input)"], index=1)
+            if dur_choice == "Custom (Manual Input)":
+                duration = st.number_input("Enter Manual Duration (mins) *", min_value=15, max_value=200, value=45, step=5)
+            else:
+                duration = int(dur_choice)
+                
             comment = st.text_input("Comment (Optional)", placeholder="e.g., Handle with care")
             pin = st.text_input("PIN *", type="password")
-            submitted = st.form_submit_button("Start", use_container_width=True)
+            
+            is_valid = bool(name.strip() and pin.strip())
+            submitted = st.button("Start", use_container_width=True, disabled=not is_valid, type="primary" if is_valid else "secondary")
 
     if st.button("✖ Cancel / Go Back", use_container_width=True):
         st.session_state['active_action'] = None
@@ -293,7 +302,6 @@ if st.session_state.get('active_action'):
             else:
                 if act_type == 'Start Queue':
                     queue.pop(0)
-                duration = custom_dur if dur_choice == "Custom" else int(dur_choice)
                 end_val = get_current_time() + timedelta(minutes=duration)
                 user_data = {"name": name, "designation": desig, "comment": comment, "pin": pin, "start_time": get_current_time().isoformat(), "end_time": end_val.isoformat(), "timeout_alert_sent": False}
                 doc_ref.set({"current_user": user_data, "queue": queue})
@@ -308,6 +316,17 @@ if st.session_state.get('active_action'):
 # CSS Styles
 st.markdown("""
 <style>
+/* Override Primary Button Color to Green */
+button[kind="primary"] {
+    background-color: #28a745 !important;
+    border-color: #28a745 !important;
+    color: white !important;
+}
+/* Force columns side-by-side inside expander on mobile */
+div[data-testid="stExpander"] div[data-testid="stHorizontalBlock"] {
+    flex-wrap: nowrap !important;
+    gap: 0.5rem !important;
+}
 div[data-testid="stExpander"] details summary p { font-size: 1.1rem; font-weight: 600; }
 .urgent-text { color: #FF4B4B; font-weight: bold; }
 /* Hide 'Press Enter to apply' */
@@ -406,11 +425,20 @@ for i, machine_name in enumerate(MACHINES):
                     st.info(f"📝 Note: {current_user['comment']}")
                 
                 with st.expander("⚙️ Finish early / Extend time"):
-                    pin_input = st.text_input("PIN *", key=f"pin_{machine_name}")
+                    pin_input = st.text_input("PIN *", type="password", key=f"pin_{machine_name}")
                     add_time = st.number_input("Add Mins", min_value=5, value=15, step=5, key=f"time_{machine_name}")
                     
+                    st.write("") # Spacer
                     c1, c2 = st.columns(2)
-                    if c1.button("Add Time", key=f"add_{machine_name}"):
+                    
+                    is_valid_pin = bool(pin_input.strip())
+                    
+                    with c1:
+                        add_btn = st.button("Add Time", use_container_width=True, disabled=not is_valid_pin, type="primary" if is_valid_pin else "secondary", key=f"add_{machine_name}")
+                    with c2:
+                        end_btn = st.button("Finish Early", use_container_width=True, disabled=not is_valid_pin, type="primary" if is_valid_pin else "secondary", key=f"end_{machine_name}")
+                        
+                    if add_btn:
                         if pin_input == current_user['pin'] or pin_input == MASTER_PIN:
                             new_end = end_time + timedelta(minutes=add_time)
                             current_user['end_time'] = new_end.isoformat()
@@ -421,7 +449,7 @@ for i, machine_name in enumerate(MACHINES):
                         else:
                             st.error("Wrong PIN")
 
-                    if c2.button("Finish Early", key=f"end_{machine_name}"):
+                    if end_btn:
                         if pin_input == current_user['pin'] or pin_input == MASTER_PIN:
                             doc_ref.update({
                                 "current_user": firestore.DELETE_FIELD,
@@ -559,7 +587,6 @@ custom_js = """
                         // Close all others via React click
                         details.forEach((d, i) => {
                             if (i !== index && d.hasAttribute('open')) {
-                                const otherSummary = d.querySelector('summary');
                                 if (otherSummary) otherSummary.click();
                             }
                         });
@@ -572,138 +599,6 @@ custom_js = """
             }
         }
     });
-
-    // --- DYNAMIC FORM VALIDATION ---
-    const observer = new MutationObserver(() => {
-        // 1. FORMS (Start Machine, Join Queue)
-        doc.querySelectorAll('div[data-testid="stForm"]').forEach(form => {
-            if (!form.hasAttribute('data-validation-bound')) {
-                form.setAttribute('data-validation-bound', 'true');
-                
-                const textInputs = form.querySelectorAll('input[type="text"], input[type="password"]');
-                const submitBtn = form.querySelector('div[data-testid="stFormSubmitButton"] button');
-                
-                if (submitBtn) {
-                    const checkInputs = () => {
-                        let isValid = true;
-                        textInputs.forEach(inp => {
-                            const wrapper = inp.closest('div[data-testid="stTextInput"]');
-                            if (wrapper) {
-                                const label = wrapper.querySelector('label');
-                                if (label && label.innerText.includes('*') && inp.value.trim() === '') {
-                                    isValid = false;
-                                }
-                            }
-                        });
-                        
-                        submitBtn.disabled = !isValid;
-                        if (isValid) {
-                            submitBtn.style.setProperty('background-color', '#28a745', 'important');
-                            submitBtn.style.setProperty('color', 'white', 'important');
-                            submitBtn.style.setProperty('border-color', '#28a745', 'important');
-                        } else {
-                            submitBtn.style.removeProperty('background-color');
-                            submitBtn.style.removeProperty('color');
-                            submitBtn.style.removeProperty('border-color');
-                        }
-                    };
-                    
-                    checkInputs();
-                    textInputs.forEach(inp => inp.addEventListener('input', checkInputs));
-                }
-            }
-        });
-
-        // 2. EXPANDERS (Finish Early / Add Time)
-        doc.querySelectorAll('div[data-testid="stExpander"]').forEach(exp => {
-            if (!exp.hasAttribute('data-validation-bound')) {
-                const pinInputWrapper = Array.from(exp.querySelectorAll('div[data-testid="stTextInput"]')).find(w => {
-                    const l = w.querySelector('label');
-                    return l && l.innerText.includes('PIN *');
-                });
-                
-                if (pinInputWrapper) {
-                    exp.setAttribute('data-validation-bound', 'true');
-                    const pinInput = pinInputWrapper.querySelector('input[type="password"], input[type="text"]');
-                    const buttons = exp.querySelectorAll('button[kind="secondary"]');
-                    
-                    if (pinInput && buttons.length > 0) {
-                        const checkExpInputs = () => {
-                            const isValid = pinInput.value.trim() !== '';
-                            buttons.forEach(btn => {
-                                btn.disabled = !isValid;
-                                if (isValid) {
-                                    btn.style.setProperty('background-color', '#28a745', 'important');
-                                    btn.style.setProperty('color', 'white', 'important');
-                                    btn.style.setProperty('border-color', '#28a745', 'important');
-                                } else {
-                                    btn.style.removeProperty('background-color');
-                                    btn.style.removeProperty('color');
-                                    btn.style.removeProperty('border-color');
-                                }
-                            });
-                        };
-                        checkExpInputs();
-                        pinInput.addEventListener('input', checkExpInputs);
-                    }
-                }
-            }
-        });
-
-        // 3. DYNAMIC CUSTOM DURATION
-        doc.querySelectorAll('div[data-testid="stForm"]').forEach(form => {
-            const selectboxes = form.querySelectorAll('div[data-testid="stSelectbox"]');
-            let durationSelectWrapper = null;
-            selectboxes.forEach(wrapper => {
-                if (wrapper.innerText.includes('Duration (mins)')) {
-                    durationSelectWrapper = wrapper;
-                }
-            });
-            
-            const numberInputs = form.querySelectorAll('div[data-testid="stNumberInput"]');
-            let customDurWrapper = null;
-            numberInputs.forEach(wrapper => {
-                if (wrapper.innerText.includes('Custom Duration')) {
-                    customDurWrapper = wrapper;
-                }
-            });
-            
-            if (durationSelectWrapper && customDurWrapper) {
-                // Check if the actual selected value contains 'Custom'
-                const selectValueNode = durationSelectWrapper.querySelector('div[data-baseweb="select"]');
-                if (selectValueNode && selectValueNode.innerText.includes('Custom')) {
-                    customDurWrapper.style.display = 'block';
-                } else {
-                    customDurWrapper.style.display = 'none';
-                }
-            }
-        });
-    });
-
-    observer.observe(doc.body, { childList: true, subtree: true });
-<style>
-/* CSS Hack for st.popover full-screen overlay on mobile */
-@media (max-width: 768px) {
-    div[data-testid="stPopoverBody"], div[role="dialog"] {
-        position: fixed !important;
-        top: 0 !important;
-        bottom: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        width: 100vw !important;
-        max-width: 100vw !important;
-        height: 100vh !important;
-        max-height: 100vh !important;
-        border-radius: 0 !important;
-        overflow-y: auto !important;
-        padding-bottom: 50px !important;
-        z-index: 999999 !important;
-        transform: none !important;
-        background-color: var(--background-color) !important;
-        margin: 0 !important;
-        border: none !important;
-    }
-}
-</style>
+</script>
 """
 components.html(custom_js, height=0)
