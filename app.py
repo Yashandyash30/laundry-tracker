@@ -259,8 +259,7 @@ if st.session_state.get('active_action'):
             q_reason = st.text_input("Reason") if q_is_urgent else ""
             q_pin = st.text_input("PIN *", type="password")
             
-            is_valid = bool(q_name.strip() and q_pin.strip())
-            submitted = st.button("Confirm", use_container_width=True, disabled=not is_valid, type="primary" if is_valid else "secondary")
+            submitted = st.button("Confirm", use_container_width=True)
         else:
             name = st.text_input("Name *")
             desig = st.selectbox("Designation *", ["PhD", "PDF", "Project Student", "Visitor"])
@@ -274,8 +273,7 @@ if st.session_state.get('active_action'):
             comment = st.text_input("Comment (Optional)", placeholder="e.g., Handle with care")
             pin = st.text_input("PIN *", type="password")
             
-            is_valid = bool(name.strip() and pin.strip())
-            submitted = st.button("Start", use_container_width=True, disabled=not is_valid, type="primary" if is_valid else "secondary")
+            submitted = st.button("Start", use_container_width=True)
 
     if st.button("✖ Cancel / Go Back", use_container_width=True):
         st.session_state['active_action'] = None
@@ -316,12 +314,6 @@ if st.session_state.get('active_action'):
 # CSS Styles
 st.markdown("""
 <style>
-/* Override Primary Button Color to Green */
-button[kind="primary"] {
-    background-color: #28a745 !important;
-    border-color: #28a745 !important;
-    color: white !important;
-}
 /* Force columns side-by-side inside expander on mobile */
 div[data-testid="stExpander"] div[data-testid="stHorizontalBlock"] {
     flex-wrap: nowrap !important;
@@ -425,21 +417,23 @@ for i, machine_name in enumerate(MACHINES):
                     st.info(f"📝 Note: {current_user['comment']}")
                 
                 with st.expander("⚙️ Finish early / Extend time"):
-                    pin_input = st.text_input("PIN *", type="password", key=f"pin_{machine_name}")
-                    add_time = st.number_input("Add Mins", min_value=5, value=15, step=5, key=f"time_{machine_name}")
+                    c_pin, c_add = st.columns([2, 1])
+                    with c_pin:
+                        pin_input = st.text_input("PIN *", type="password", key=f"pin_{machine_name}")
+                    with c_add:
+                        add_time = st.number_input("Add Mins", min_value=5, value=15, step=5, key=f"time_{machine_name}")
                     
                     st.write("") # Spacer
                     c1, c2 = st.columns(2)
-                    
-                    is_valid_pin = bool(pin_input.strip())
-                    
                     with c1:
-                        add_btn = st.button("Add Time", use_container_width=True, disabled=not is_valid_pin, type="primary" if is_valid_pin else "secondary", key=f"add_{machine_name}")
+                        add_btn = st.button("Add Time", use_container_width=True, key=f"add_{machine_name}")
                     with c2:
-                        end_btn = st.button("Finish Early", use_container_width=True, disabled=not is_valid_pin, type="primary" if is_valid_pin else "secondary", key=f"end_{machine_name}")
+                        end_btn = st.button("Finish Early", use_container_width=True, key=f"end_{machine_name}")
                         
                     if add_btn:
-                        if pin_input == current_user['pin'] or pin_input == MASTER_PIN:
+                        if not pin_input.strip():
+                            st.error("⚠️ Please enter PIN.")
+                        elif pin_input == current_user['pin'] or pin_input == MASTER_PIN:
                             new_end = end_time + timedelta(minutes=add_time)
                             current_user['end_time'] = new_end.isoformat()
                             # Reset alert flag if adding time
@@ -450,7 +444,9 @@ for i, machine_name in enumerate(MACHINES):
                             st.error("Wrong PIN")
 
                     if end_btn:
-                        if pin_input == current_user['pin'] or pin_input == MASTER_PIN:
+                        if not pin_input.strip():
+                            st.error("⚠️ Please enter PIN.")
+                        elif pin_input == current_user['pin'] or pin_input == MASTER_PIN:
                             doc_ref.update({
                                 "current_user": firestore.DELETE_FIELD,
                                 "last_free_time": get_current_time().isoformat()
@@ -587,6 +583,7 @@ custom_js = """
                         // Close all others via React click
                         details.forEach((d, i) => {
                             if (i !== index && d.hasAttribute('open')) {
+                                const otherSummary = d.querySelector('summary');
                                 if (otherSummary) otherSummary.click();
                             }
                         });
@@ -599,6 +596,85 @@ custom_js = """
             }
         }
     });
+
+    // --- COSMETIC BUTTON COLOR VALIDATION ---
+    const colorObserver = new MutationObserver(() => {
+        // Virtual Page Buttons
+        doc.querySelectorAll('div[data-testid="stContainer"]').forEach(container => {
+            if (!container.hasAttribute('data-color-bound')) {
+                container.setAttribute('data-color-bound', 'true');
+                const textInputs = container.querySelectorAll('input[type="text"], input[type="password"]');
+                const buttons = Array.from(container.querySelectorAll('button')).filter(b => b.innerText.includes('Confirm') || b.innerText.includes('Start'));
+                
+                if (buttons.length > 0) {
+                    const checkInputs = () => {
+                        let isValid = true;
+                        textInputs.forEach(inp => {
+                            const wrapper = inp.closest('div[data-testid="stTextInput"]');
+                            if (wrapper) {
+                                const label = wrapper.querySelector('label');
+                                if (label && label.innerText.includes('*') && inp.value.trim() === '') {
+                                    isValid = false;
+                                }
+                            }
+                        });
+                        buttons.forEach(submitBtn => {
+                            if (isValid) {
+                                submitBtn.style.setProperty('background-color', '#28a745', 'important');
+                                submitBtn.style.setProperty('color', 'white', 'important');
+                                submitBtn.style.setProperty('border-color', '#28a745', 'important');
+                            } else {
+                                submitBtn.style.removeProperty('background-color');
+                                submitBtn.style.removeProperty('color');
+                                submitBtn.style.removeProperty('border-color');
+                            }
+                        });
+                    };
+                    checkInputs();
+                    textInputs.forEach(inp => inp.addEventListener('input', checkInputs));
+                }
+            }
+        });
+
+        // Expander Buttons
+        doc.querySelectorAll('div[data-testid="stExpander"]').forEach(exp => {
+            if (!exp.hasAttribute('data-color-bound')) {
+                const pinInputWrapper = Array.from(exp.querySelectorAll('div[data-testid="stTextInput"]')).find(w => {
+                    const l = w.querySelector('label');
+                    return l && l.innerText.includes('PIN *');
+                });
+                
+                if (pinInputWrapper) {
+                    exp.setAttribute('data-color-bound', 'true');
+                    const pinInput = pinInputWrapper.querySelector('input[type="password"], input[type="text"]');
+                    const actionBtns = Array.from(exp.querySelectorAll('button')).filter(b => 
+                        b.innerText.includes('Add Time') || b.innerText.includes('Finish Early')
+                    );
+                    
+                    if (pinInput && actionBtns.length > 0) {
+                        const checkExpInputs = () => {
+                            const isValid = pinInput.value.trim() !== '';
+                            actionBtns.forEach(btn => {
+                                if (isValid) {
+                                    btn.style.setProperty('background-color', '#28a745', 'important');
+                                    btn.style.setProperty('color', 'white', 'important');
+                                    btn.style.setProperty('border-color', '#28a745', 'important');
+                                } else {
+                                    btn.style.removeProperty('background-color');
+                                    btn.style.removeProperty('color');
+                                    btn.style.removeProperty('border-color');
+                                }
+                            });
+                        };
+                        checkExpInputs();
+                        pinInput.addEventListener('input', checkExpInputs);
+                    }
+                }
+            }
+        });
+    });
+
+    colorObserver.observe(doc.body, { childList: true, subtree: true });
 </script>
 """
 components.html(custom_js, height=0)
