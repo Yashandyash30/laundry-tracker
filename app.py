@@ -16,9 +16,13 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
+if 'active_action' not in st.session_state:
+    st.session_state['active_action'] = None
+
 # --- 2. CONFIGURATION ---
 # Refresh every 30 seconds to check for status changes
-st_autorefresh(interval=30000, key="data_refresh")
+if not st.session_state.get('active_action'):
+    st_autorefresh(interval=30000, key="data_refresh")
 
 IST = pytz.timezone('Asia/Kolkata')
 MASTER_PIN = st.secrets["general"]["master_pin"]
@@ -229,6 +233,78 @@ else:
     DB_COLLECTION = "machines_rohini"
     MACHINES = ["Rohini Washer 1", "Rohini Washer 2", "Rohini Dryer"]
 
+if st.session_state.get('active_action'):
+    action = st.session_state['active_action']
+    machine_name = action['machine_name']
+    act_type = action['type']
+    queue_0_name = action.get('queue_0_name', '')
+    
+    st.markdown(f"## 🧺 {machine_name}")
+    st.markdown(f"### {act_type.replace('_', ' ').title()}")
+    
+    doc_ref = db.collection(DB_COLLECTION).document(machine_name)
+    doc_snap = doc_ref.get()
+    if not doc_snap.exists:
+        st.error("Machine not found.")
+        st.stop()
+    m_data = doc_snap.to_dict()
+    queue = m_data.get('queue', [])
+    
+    with st.form(f"action_form_{machine_name}"):
+        if act_type == 'Join Queue':
+            q_name = st.text_input("Name *")
+            q_desig = st.selectbox("Designation *", ["PhD", "PDF", "Project Student", "Visitor"])
+            q_comment = st.text_input("Comment (Optional)", placeholder="e.g., Handle with care")
+            q_is_urgent = st.checkbox("🔥 Urgent?")
+            q_reason = st.text_input("Reason") if q_is_urgent else ""
+            q_pin = st.text_input("PIN *", type="password")
+            submitted = st.form_submit_button("Confirm", use_container_width=True)
+        else:
+            name = st.text_input("Name *")
+            desig = st.selectbox("Designation *", ["PhD", "PDF", "Project Student", "Visitor"])
+            dur_choice = st.selectbox("Duration (mins) *", ["30", "45", "60", "90", "120", "Custom"], index=1)
+            custom_dur = st.number_input("Custom Duration (mins)", min_value=15, max_value=200, value=45, step=5)
+            comment = st.text_input("Comment (Optional)", placeholder="e.g., Handle with care")
+            pin = st.text_input("PIN *", type="password")
+            submitted = st.form_submit_button("Start", use_container_width=True)
+
+    if st.button("✖ Cancel / Go Back", use_container_width=True):
+        st.session_state['active_action'] = None
+        st.rerun()
+
+    if submitted:
+        if act_type == 'Join Queue':
+            if not q_name.strip() or not q_pin.strip():
+                st.error("⚠️ Please fill in all mandatory fields (Name and PIN).")
+            else:
+                data = {"name": q_name, "designation": q_desig, "comment": q_comment, "pin": q_pin, "urgent": q_is_urgent, "urgent_reason": q_reason}
+                doc_ref.update({"queue": firestore.ArrayUnion([data])})
+                alert = f"📝 *Queue Update*\n👤 User: {q_name} joined queue for {machine_name}."
+                if q_comment.strip(): alert += f"\n📝 *Note:* _{q_comment.strip()}_"
+                if q_is_urgent: alert += f"\n🔥 *URGENT*: {q_reason}"
+                send_telegram(alert, selected_hostel)
+                st.session_state['active_action'] = None
+                st.rerun()
+        else:
+            if not name.strip() or not pin.strip():
+                st.error("⚠️ Please fill in all mandatory fields (Name and PIN).")
+            elif act_type == 'Start Queue' and name.strip().lower() != queue_0_name.strip().lower():
+                st.error(f"Only {queue_0_name} can start!")
+            else:
+                if act_type == 'Start Queue':
+                    queue.pop(0)
+                duration = custom_dur if dur_choice == "Custom" else int(dur_choice)
+                end_val = get_current_time() + timedelta(minutes=duration)
+                user_data = {"name": name, "designation": desig, "comment": comment, "pin": pin, "start_time": get_current_time().isoformat(), "end_time": end_val.isoformat(), "timeout_alert_sent": False}
+                doc_ref.set({"current_user": user_data, "queue": queue})
+                add_log(DB_COLLECTION, machine_name, name, desig, duration)
+                msg = f"🧺 *{machine_name} Started*\n👤 User: {name}\n⏱ Duration: {duration} mins"
+                if comment.strip(): msg += f"\n📝 *Note:* _{comment.strip()}_"
+                send_telegram(msg, selected_hostel)
+                st.session_state['active_action'] = None
+                st.rerun()
+    st.stop()
+
 # CSS Styles
 st.markdown("""
 <style>
@@ -433,88 +509,18 @@ for i, machine_name in enumerate(MACHINES):
                          send_telegram(f"⚠️ *Queue Alert*\n{timed_out_user['name']} timed out.\n👉 Next: {queue[0]['name']} starts now.", selected_hostel)
                          st.rerun()
 
-                with st.popover(f"Start ({queue[0]['name']})", use_container_width=True):
-                    c1, c2 = st.columns([1, 10])
-                    with c1:
-                        st.button("✖", key=f"x_q_{machine_name}", help="Close")
-                    with st.form(f"st_form_{machine_name}"):
-                        name = st.text_input("Name *")
-                        desig = st.selectbox("Designation *", ["PhD", "PDF", "Project Student", "Visitor"], key=f"d1_{machine_name}")
-                        
-                        dur_choice = st.selectbox("Duration (mins) *", ["30", "45", "60", "90", "120", "Custom"], index=1, key=f"dur1_{machine_name}")
-                        custom_dur = st.number_input("Custom Duration (mins)", min_value=15, max_value=200, value=45, step=5, key=f"cdur1_{machine_name}")
-                        
-                        comment = st.text_input("Comment (Optional)", placeholder="e.g., Handle with care", key=f"c1_{machine_name}")
-                        pin = st.text_input("PIN *", type="password", key=f"p1_{machine_name}")
-                        if st.form_submit_button("Start", use_container_width=True):
-                            if not name.strip() or not pin.strip():
-                                st.error("⚠️ Please fill in all mandatory fields (Name and PIN).")
-                            elif name.strip().lower() != queue[0]['name'].strip().lower():
-                                st.error(f"Only {queue[0]['name']} can start!")
-                            else:
-                                queue.pop(0)
-                                duration = custom_dur if dur_choice == "Custom" else int(dur_choice)
-                                end_val = get_current_time() + timedelta(minutes=duration)
-                                user_data = {"name": name, "designation": desig, "comment": comment, "pin": pin, "start_time": get_current_time().isoformat(), "end_time": end_val.isoformat(), "timeout_alert_sent": False}
-                                doc_ref.set({"current_user": user_data, "queue": queue})
-                                add_log(DB_COLLECTION, machine_name, name, desig, duration)
-                                msg = f"🧺 *{machine_name} Started*\n👤 User: {name}\n⏱ Duration: {duration} mins"
-                                if comment.strip(): msg += f"\n📝 *Note:* _{comment.strip()}_"
-                                send_telegram(msg, selected_hostel)
-                                st.rerun()
+                if st.button(f"Start ({queue[0]['name']})", use_container_width=True, key=f"btn_sq_{machine_name}"):
+                    st.session_state['active_action'] = {'type': 'Start Queue', 'machine_name': machine_name, 'queue_0_name': queue[0]['name']}
+                    st.rerun()
             else:
-                with st.popover("Start Machine", use_container_width=True):
-                    c1, c2 = st.columns([1, 10])
-                    with c1:
-                        st.button("✖", key=f"x_f_{machine_name}", help="Close")
-                    with st.form(f"free_st_{machine_name}"):
-                        name = st.text_input("Name *")
-                        desig = st.selectbox("Designation *", ["PhD","PDF","Project Student", "Visitor"], key=f"d2_{machine_name}")
-                        
-                        dur_choice = st.selectbox("Duration (mins) *", ["30", "45", "60", "90", "120", "Custom"], index=1, key=f"dur2_{machine_name}")
-                        custom_dur = st.number_input("Custom Duration (mins)", min_value=15, max_value=200, value=45, step=5, key=f"cdur2_{machine_name}")
-                        
-                        comment = st.text_input("Comment (Optional)", placeholder="e.g., Handle with care", key=f"c2_{machine_name}")
-                        pin = st.text_input("PIN *", type="password", key=f"p2_{machine_name}")
-                        if st.form_submit_button("Start", use_container_width=True):
-                            if not name.strip() or not pin.strip():
-                                st.error("⚠️ Please fill in all mandatory fields (Name and PIN).")
-                                st.stop()
-                            duration = custom_dur if dur_choice == "Custom" else int(dur_choice)
-                            end_val = get_current_time() + timedelta(minutes=duration)
-                            user_data = {"name": name, "designation": desig, "comment": comment, "pin": pin, "start_time": get_current_time().isoformat(), "end_time": end_val.isoformat(), "timeout_alert_sent": False}
-                            doc_ref.set({"current_user": user_data, "queue": queue})
-                            add_log(DB_COLLECTION, machine_name, name, desig, duration)
-                            msg = f"🧺 *{machine_name} Started*\n👤 User: {name}\n⏱ Duration: {duration} mins"
-                            if comment.strip(): msg += f"\n📝 *Note:* _{comment.strip()}_"
-                            send_telegram(msg, selected_hostel)
-                            st.rerun()
+                if st.button("Start Machine", use_container_width=True, key=f"btn_sf_{machine_name}"):
+                    st.session_state['active_action'] = {'type': 'Start Machine', 'machine_name': machine_name}
+                    st.rerun()
 
             if show_join:
-                with st.popover("Join Queue", use_container_width=True):
-                    c1, c2 = st.columns([1, 10])
-                    with c1:
-                        st.button("✖", key=f"x_j_{machine_name}", help="Close")
-                    with st.form(f"join_form_{machine_name}"):
-                        q_name = st.text_input("Name *", key=f"qn_{machine_name}")
-                        q_desig = st.selectbox("Designation *", ["PhD", "PDF", "Project Student", "Visitor"], key=f"qd_{machine_name}")
-                        q_comment = st.text_input("Comment (Optional)", placeholder="e.g., Handle with care", key=f"qc_{machine_name}")
-                        q_is_urgent = st.checkbox("🔥 Urgent?", key=f"qu_{machine_name}")
-                        q_reason = st.text_input("Reason", key=f"qr_{machine_name}") if q_is_urgent else ""
-                        q_pin = st.text_input("PIN *", type="password", key=f"qp_{machine_name}")
-                        
-                        if st.form_submit_button("Confirm", use_container_width=True):
-                            if not q_name.strip() or not q_pin.strip():
-                                st.error("⚠️ Please fill in all mandatory fields (Name and PIN).")
-                            else:
-                                data = {"name": q_name, "designation": q_desig, "comment": q_comment, "pin": q_pin, "urgent": q_is_urgent, "urgent_reason": q_reason}
-                                doc_ref.update({"queue": firestore.ArrayUnion([data])})
-                                
-                                alert = f"📝 *Queue Update*\n👤 User: {q_name} joined queue for {machine_name}."
-                                if q_comment.strip(): alert += f"\n📝 *Note:* _{q_comment.strip()}_"
-                                if q_is_urgent: alert += f"\n🔥 *URGENT*: {q_reason}"
-                                send_telegram(alert, selected_hostel)
-                                st.rerun()
+                if st.button("Join Queue", use_container_width=True, key=f"btn_jq_{machine_name}"):
+                    st.session_state['active_action'] = {'type': 'Join Queue', 'machine_name': machine_name}
+                    st.rerun()
 
 # --- CUSTOM JS ---
 custom_js = """
