@@ -432,13 +432,15 @@ for i, machine_name in enumerate(MACHINES):
 
                 with st.popover(f"Start ({queue[0]['name']})", use_container_width=True):
                     with st.form(f"st_form_{machine_name}"):
-                        name = st.text_input("Name")
-                        desig = st.selectbox("Designation", ["PhD", "PDF", "Project Student", "Visitor"], key=f"d1_{machine_name}")
-                        duration = st.number_input("Duration (mins)", min_value=15, max_value=200, value=45, step=5, key=f"dur1_{machine_name}")
+                        name = st.text_input("Name *")
+                        desig = st.selectbox("Designation *", ["PhD", "PDF", "Project Student", "Visitor"], key=f"d1_{machine_name}")
+                        duration = st.number_input("Duration (mins) *", min_value=15, max_value=200, value=45, step=5, key=f"dur1_{machine_name}")
                         comment = st.text_input("Comment (Optional)", key=f"c1_{machine_name}")
-                        pin = st.text_input("PIN", type="password", key=f"p1_{machine_name}")
+                        pin = st.text_input("PIN *", type="password", key=f"p1_{machine_name}")
                         if st.form_submit_button("Start"):
-                            if name.strip().lower() != queue[0]['name'].strip().lower():
+                            if not name.strip() or not pin.strip():
+                                st.error("⚠️ Please fill in all mandatory fields (Name and PIN).")
+                            elif name.strip().lower() != queue[0]['name'].strip().lower():
                                 st.error(f"Only {queue[0]['name']} can start!")
                             else:
                                 queue.pop(0)
@@ -451,12 +453,15 @@ for i, machine_name in enumerate(MACHINES):
             else:
                 with st.popover("Start Machine", use_container_width=True):
                     with st.form(f"free_st_{machine_name}"):
-                        name = st.text_input("Name")
-                        desig = st.selectbox("Designation", ["PhD","PDF","Project Student", "Visitor"], key=f"d2_{machine_name}")
-                        duration = st.number_input("Duration (mins)", min_value=15, max_value=200, value=45, step=5, key=f"dur2_{machine_name}")
+                        name = st.text_input("Name *")
+                        desig = st.selectbox("Designation *", ["PhD","PDF","Project Student", "Visitor"], key=f"d2_{machine_name}")
+                        duration = st.number_input("Duration (mins) *", min_value=15, max_value=200, value=45, step=5, key=f"dur2_{machine_name}")
                         comment = st.text_input("Comment (Optional)", key=f"c2_{machine_name}")
-                        pin = st.text_input("PIN", type="password", key=f"p2_{machine_name}")
+                        pin = st.text_input("PIN *", type="password", key=f"p2_{machine_name}")
                         if st.form_submit_button("Start"):
+                            if not name.strip() or not pin.strip():
+                                st.error("⚠️ Please fill in all mandatory fields (Name and PIN).")
+                                st.stop()
                             end_val = get_current_time() + timedelta(minutes=duration)
                             user_data = {"name": name, "designation": desig, "comment": comment, "pin": pin, "start_time": get_current_time().isoformat(), "end_time": end_val.isoformat(), "timeout_alert_sent": False}
                             doc_ref.set({"current_user": user_data, "queue": queue})
@@ -466,59 +471,77 @@ for i, machine_name in enumerate(MACHINES):
 
             if show_join:
                 with st.popover("Join Queue", use_container_width=True):
-                    q_name = st.text_input("Name", key=f"qn_{machine_name}")
-                    q_desig = st.selectbox("Designation", ["PhD", "PDF", "Project Student", "Visitor"], key=f"qd_{machine_name}")
-                    q_comment = st.text_input("Comment (Optional)", key=f"qc_{machine_name}")
-                    q_is_urgent = st.checkbox("🔥 Urgent?", key=f"qu_{machine_name}")
-                    q_reason = st.text_input("Reason", key=f"qr_{machine_name}") if q_is_urgent else ""
-                    q_pin = st.text_input("PIN", type="password", key=f"qp_{machine_name}")
-                    
-                    if st.button("Confirm", key=f"qb_{machine_name}"):
-                        if q_name and q_pin:
-                            data = {"name": q_name, "designation": q_desig, "comment": q_comment, "pin": q_pin, "urgent": q_is_urgent, "urgent_reason": q_reason}
-                            doc_ref.update({"queue": firestore.ArrayUnion([data])})
-                            
-                            alert = f"📝 *Queue Update*\n{q_name} joined queue for {machine_name}."
-                            if q_is_urgent: alert += f"\n🔥 *URGENT*: {q_reason}"
-                            send_telegram(alert, selected_hostel)
-                            st.rerun()
+                    with st.form(f"join_form_{machine_name}"):
+                        q_name = st.text_input("Name *", key=f"qn_{machine_name}")
+                        q_desig = st.selectbox("Designation *", ["PhD", "PDF", "Project Student", "Visitor"], key=f"qd_{machine_name}")
+                        q_comment = st.text_input("Comment (Optional)", key=f"qc_{machine_name}")
+                        q_is_urgent = st.checkbox("🔥 Urgent?", key=f"qu_{machine_name}")
+                        q_reason = st.text_input("Reason", key=f"qr_{machine_name}") if q_is_urgent else ""
+                        q_pin = st.text_input("PIN *", type="password", key=f"qp_{machine_name}")
+                        
+                        if st.form_submit_button("Confirm"):
+                            if not q_name.strip() or not q_pin.strip():
+                                st.error("⚠️ Please fill in all mandatory fields (Name and PIN).")
+                            else:
+                                data = {"name": q_name, "designation": q_desig, "comment": q_comment, "pin": q_pin, "urgent": q_is_urgent, "urgent_reason": q_reason}
+                                doc_ref.update({"queue": firestore.ArrayUnion([data])})
+                                
+                                alert = f"📝 *Queue Update*\n{q_name} joined queue for {machine_name}."
+                                if q_is_urgent: alert += f"\n🔥 *URGENT*: {q_reason}"
+                                send_telegram(alert, selected_hostel)
+                                st.rerun()
 
-# --- ACCORDION JS ---
-accordion_js = """
+# --- CUSTOM JS ---
+custom_js = """
 <script>
     const doc = window.parent.document;
-    const details = doc.querySelectorAll('div[data-testid="stExpander"] details');
     
+    // --- ACCORDION LOGIC ---
+    const details = doc.querySelectorAll('div[data-testid="stExpander"] details');
     details.forEach((targetDetail, index) => {
-        // Enforce accordion behavior natively in modern browsers
         targetDetail.setAttribute('name', 'laundry_accordion');
-        
-        // Restore state
         const savedIndex = sessionStorage.getItem('open_expander');
         if (savedIndex !== null) {
-            if (parseInt(savedIndex) === index) {
-                targetDetail.setAttribute('open', '');
-            } else {
-                targetDetail.removeAttribute('open');
-            }
+            if (parseInt(savedIndex) === index) targetDetail.setAttribute('open', '');
+            else targetDetail.removeAttribute('open');
         }
-        
-        // Save state on click
         if (!targetDetail.hasAttribute('data-accordion-bound')) {
             targetDetail.setAttribute('data-accordion-bound', 'true');
             targetDetail.addEventListener('click', () => {
                 setTimeout(() => {
-                    if (targetDetail.hasAttribute('open')) {
-                        sessionStorage.setItem('open_expander', index);
-                    } else {
-                        if (sessionStorage.getItem('open_expander') == index) {
-                            sessionStorage.removeItem('open_expander');
-                        }
-                    }
+                    if (targetDetail.hasAttribute('open')) sessionStorage.setItem('open_expander', index);
+                    else if (sessionStorage.getItem('open_expander') == index) sessionStorage.removeItem('open_expander');
                 }, 10);
             });
         }
     });
+
+    // --- DYNAMIC FORM VALIDATION ---
+    doc.querySelectorAll('div[data-testid="stForm"]').forEach(form => {
+        const textInputs = form.querySelectorAll('input[type="text"], input[type="password"]');
+        const submitBtn = form.querySelector('button[kind="formSubmit"]');
+        
+        if (submitBtn && !form.hasAttribute('data-validation-bound')) {
+            form.setAttribute('data-validation-bound', 'true');
+            
+            const checkInputs = () => {
+                let isValid = true;
+                textInputs.forEach(inp => {
+                    const labelText = inp.getAttribute('aria-label') || '';
+                    if (labelText.includes('*') && inp.value.trim() === '') {
+                        isValid = false;
+                    }
+                });
+                submitBtn.disabled = !isValid;
+            };
+            
+            // Initial check
+            checkInputs();
+            
+            // Check on every keystroke
+            textInputs.forEach(inp => inp.addEventListener('input', checkInputs));
+        }
+    });
 </script>
 """
-components.html(accordion_js, height=0)
+components.html(custom_js, height=0)
