@@ -314,11 +314,6 @@ if st.session_state.get('active_action'):
 # CSS Styles
 st.markdown("""
 <style>
-/* Force columns side-by-side inside expander on mobile */
-div[data-testid="stExpander"] div[data-testid="stHorizontalBlock"] {
-    flex-wrap: nowrap !important;
-    gap: 0.5rem !important;
-}
 div[data-testid="stExpander"] details summary p { font-size: 1.1rem; font-weight: 600; }
 .urgent-text { color: #FF4B4B; font-weight: bold; }
 /* Hide 'Press Enter to apply' */
@@ -600,8 +595,10 @@ custom_js = """
     // --- COSMETIC BUTTON COLOR VALIDATION ---
     const colorObserver = new MutationObserver(() => {
         // Virtual Page Buttons
-        doc.querySelectorAll('div[data-testid="stContainer"]').forEach(container => {
-            if (!container.hasAttribute('data-color-bound')) {
+        const virtBtns = Array.from(doc.querySelectorAll('button')).filter(b => b.innerText.includes('Confirm') || b.innerText.includes('Start'));
+        virtBtns.forEach(btn => {
+            const container = btn.closest('div[data-testid="stVerticalBlockBorderWrapper"]') || btn.closest('div[data-testid="stVerticalBlock"]');
+            if (container && !container.hasAttribute('data-color-bound')) {
                 container.setAttribute('data-color-bound', 'true');
                 const textInputs = container.querySelectorAll('input[type="text"], input[type="password"]');
                 const buttons = Array.from(container.querySelectorAll('button')).filter(b => b.innerText.includes('Confirm') || b.innerText.includes('Start'));
