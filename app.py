@@ -19,24 +19,25 @@ db = firestore.client()
 # Refresh every 30 seconds to check for status changes
 st_autorefresh(interval=30000, key="data_refresh")
 
-MACHINES = ["Washing Machine (Floor 3)", "Washing Machine (Floor 2)", "Clothes Dryer (Floor 1)"]
 IST = pytz.timezone('Asia/Kolkata')
 MASTER_PIN = st.secrets["general"]["master_pin"]
 BUFFER_MINUTES = 15
 
 # TELEGRAM CONFIG
 BOT_TOKEN = st.secrets["telegram"]["bot_token"]
-CHAT_ID = st.secrets["telegram"]["chat_id"]
+CHAT_ID_KRITIKA = st.secrets["telegram"]["chat_id_kritika"]
+CHAT_ID_ROHINI = st.secrets["telegram"]["chat_id_rohini"]
 
 # --- 3. NOTIFICATION SYSTEMS ---
 
-def send_telegram(message):
+def send_telegram(message, hostel_name):
     """Sends a message to the Telegram Group"""
     try:
+        chat_id = CHAT_ID_KRITIKA if hostel_name == "Kritika Hostel" else CHAT_ID_ROHINI
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         payload = {
-            "chat_id": CHAT_ID,
-            "text": message,
+            "chat_id": chat_id,
+            "text": f"[{hostel_name}] {message}",
             "parse_mode": "Markdown"
         }
         requests.post(url, json=payload)
@@ -96,12 +97,23 @@ if 'machine_states' not in st.session_state:
 
 # --- 5. APP INTERFACE ---
 st.set_page_config(page_title="Hostel Laundry", page_icon="🧺", layout="wide")
-st.title("🧺 ARIES Laundry Tracker")
-st.caption("Live Status • Telegram Alerts • Browser Notifications")
 
 with st.sidebar:
+    st.write("### 📍 Location")
+    selected_hostel = st.radio("Choose your location:", ["Kritika Hostel", "Rohini Hostel"])
+    st.write("---")
     st.write("### ⚙️ Settings")
     request_permission_button()
+
+st.title(f"🧺 ARIES Laundry Tracker - {selected_hostel}")
+st.caption("Live Status • Telegram Alerts • Browser Notifications")
+
+if selected_hostel == "Kritika Hostel":
+    DB_COLLECTION = "machines_kritika"
+    MACHINES = ["Kritika Washer (Floor 3)", "Kritika Washer (Floor 2)", "Kritika Dryer (Floor 1)"]
+else:
+    DB_COLLECTION = "machines_rohini"
+    MACHINES = ["Rohini Washer 1", "Rohini Washer 2", "Rohini Dryer"]
 
 # CSS Styles
 st.markdown("""
@@ -119,7 +131,7 @@ for i, machine_name in enumerate(MACHINES):
             st.subheader(f"{machine_name}")
             
             # Fetch data
-            doc_ref = db.collection("machines").document(machine_name)
+            doc_ref = db.collection(DB_COLLECTION).document(machine_name)
             doc = doc_ref.get()
             machine_data = doc.to_dict() if doc.exists else {}
             
@@ -150,8 +162,8 @@ for i, machine_name in enumerate(MACHINES):
                         if queue: msg += f"\n👉 Next: *{queue[0]['name']}*"
                         else: msg += "\n✅ Machine is now free."
                         
-                        send_telegram(msg)
-                        trigger_browser_notification("⏰ Time's Up!", f"{user_name} finished on {machine_name}")
+                        send_telegram(msg, selected_hostel)
+                        trigger_browser_notification(f"[{selected_hostel}] ⏰ Time's Up!", f"{user_name} finished on {machine_name}")
                         
                         # Mark as sent
                         current_user['timeout_alert_sent'] = True
@@ -159,7 +171,8 @@ for i, machine_name in enumerate(MACHINES):
                         st.rerun()
 
             # Retrieve Previous State (for Browser Notifications)
-            prev_state = st.session_state['machine_states'].get(machine_name, {
+            state_key = f"{selected_hostel}_{machine_name}"
+            prev_state = st.session_state['machine_states'].get(state_key, {
                 'is_running': is_running,
                 'queue_len': len(queue),
                 'first_in_line': queue[0]['name'] if queue else None
@@ -167,10 +180,10 @@ for i, machine_name in enumerate(MACHINES):
 
             # Browser Trigger: Machine became free
             if prev_state['is_running'] and not is_running:
-                trigger_browser_notification("✅ Machine Free!", f"{machine_name} is available.")
+                trigger_browser_notification(f"[{selected_hostel}] ✅ Machine Free!", f"{machine_name} is available.")
 
             # Update State
-            st.session_state['machine_states'][machine_name] = {
+            st.session_state['machine_states'][state_key] = {
                 'is_running': is_running,
                 'queue_len': len(queue),
                 'first_in_line': queue[0]['name'] if queue else None
@@ -216,7 +229,7 @@ for i, machine_name in enumerate(MACHINES):
                             # MANUAL FINISH ALERT
                             msg = f"✅ *{machine_name} FINISHED EARLY*\nUser: {current_user['name']}"
                             if queue: msg += f"\n👉 Next: *{queue[0]['name']}*"
-                            send_telegram(msg)
+                            send_telegram(msg, selected_hostel)
                             st.rerun()
                         else:
                             st.error("Wrong PIN")
@@ -243,7 +256,7 @@ for i, machine_name in enumerate(MACHINES):
                         if len(queue) == 1:
                             timed_out_user = queue.pop(0)
                             doc_ref.update({"queue": queue, "last_free_time": get_current_time().isoformat()})
-                            send_telegram(f"⚠️ *Queue Alert*\n{timed_out_user['name']} timed out and was automatically removed from the queue for {machine_name}.")
+                            send_telegram(f"⚠️ *Queue Alert*\n{timed_out_user['name']} timed out and was automatically removed from the queue for {machine_name}.", selected_hostel)
                             st.rerun()
 
             # --- QUEUE DISPLAY ---
@@ -292,7 +305,7 @@ for i, machine_name in enumerate(MACHINES):
                     if st.button(f"🚀 Skip to {queue[1]['name']}", key=f"skip_{machine_name}"):
                          timed_out_user = queue.pop(0)
                          doc_ref.update({"queue": queue, "last_free_time": get_current_time().isoformat()})
-                         send_telegram(f"⚠️ *Queue Alert*\n{timed_out_user['name']} timed out.\n👉 Next: {queue[0]['name']} starts now.")
+                         send_telegram(f"⚠️ *Queue Alert*\n{timed_out_user['name']} timed out.\n👉 Next: {queue[0]['name']} starts now.", selected_hostel)
                          st.rerun()
 
                 with st.popover(f"Start ({queue[0]['name']})", use_container_width=True):
@@ -310,7 +323,7 @@ for i, machine_name in enumerate(MACHINES):
                                 end_val = get_current_time() + timedelta(minutes=duration)
                                 user_data = {"name": name, "designation": desig, "comment": comment, "pin": pin, "start_time": get_current_time().isoformat(), "end_time": end_val.isoformat(), "timeout_alert_sent": False}
                                 doc_ref.set({"current_user": user_data, "queue": queue})
-                                send_telegram(f"🧺 *{machine_name} Started*\n👤 User: {name}\n⏱ Duration: {duration} mins")
+                                send_telegram(f"🧺 *{machine_name} Started*\n👤 User: {name}\n⏱ Duration: {duration} mins", selected_hostel)
                                 st.rerun()
             else:
                 with st.popover("Start Machine", use_container_width=True):
@@ -324,7 +337,7 @@ for i, machine_name in enumerate(MACHINES):
                             end_val = get_current_time() + timedelta(minutes=duration)
                             user_data = {"name": name, "designation": desig, "comment": comment, "pin": pin, "start_time": get_current_time().isoformat(), "end_time": end_val.isoformat(), "timeout_alert_sent": False}
                             doc_ref.set({"current_user": user_data, "queue": queue})
-                            send_telegram(f"🧺 *{machine_name} Started*\n👤 User: {name}\n⏱ Duration: {duration} mins")
+                            send_telegram(f"🧺 *{machine_name} Started*\n👤 User: {name}\n⏱ Duration: {duration} mins", selected_hostel)
                             st.rerun()
 
             if show_join:
@@ -343,5 +356,5 @@ for i, machine_name in enumerate(MACHINES):
                             
                             alert = f"📝 *Queue Update*\n{q_name} joined queue for {machine_name}."
                             if q_is_urgent: alert += f"\n🔥 *URGENT*: {q_reason}"
-                            send_telegram(alert)
+                            send_telegram(alert, selected_hostel)
                             st.rerun()
