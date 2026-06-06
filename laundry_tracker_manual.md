@@ -1,5 +1,3 @@
-***
-
 # 🧺 The Guide to the Hostel Laundry Tracker!
 
 Here is everything you need to know to get your clothes washed without the headache using Hostel Laundry Tracker .
@@ -45,5 +43,4 @@ Did your clothes wash faster than expected? Or do you need an extra 15 minutes b
 
 **Be kind, respect the queue, and happy washing! 🫧👕**
 
-
-Note. The App timer doesnt ensures that machine timer will be in synchronization. The washing machine timers works differently and its possible that your cycle may finish on app but not on machine. In that case please add time to the app (refere to point 4)
+> **📝 Note:** The app timer doesn't ensure that the physical machine timer will be in perfect synchronization. The washing machine timers work differently and it's possible that your cycle may finish on the app but not on the machine. In that case, please add time to the app (refer to point 4).
