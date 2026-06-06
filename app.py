@@ -118,7 +118,7 @@ st.set_page_config(page_title="Hostel Laundry", page_icon="🧺", layout="wide")
 
 with st.sidebar:
     st.write("### 🧭 Navigation")
-    page = st.radio("Go to:", ["Dashboard", "Usage Logs", "Announcements"], label_visibility="collapsed")
+    page = st.radio("Go to:", ["Dashboard", "Usage Logs", "Announcements", "User Manual"], label_visibility="collapsed")
     st.write("---")
 
 if page == "Announcements":
@@ -205,6 +205,15 @@ if page == "Usage Logs":
                 st.info("No logs found for this hostel.")
         except Exception as e:
             st.error(f"Could not load logs: {e}")
+    st.stop()
+
+if page == "User Manual":
+    try:
+        with open("laundry_tracker_manual.md", "r", encoding="utf-8") as f:
+            manual_content = f.read()
+        st.markdown(manual_content)
+    except FileNotFoundError:
+        st.error("Manual file not found.")
     st.stop()
 
 st.markdown("<h2 style='margin-top: -50px; margin-bottom: -15px;'>🧺 ARIES Laundry Tracker</h2>", unsafe_allow_html=True)

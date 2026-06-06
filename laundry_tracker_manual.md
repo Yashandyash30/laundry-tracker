@@ -41,6 +41,7 @@ Did your clothes wash faster than expected? Or do you need an extra 15 minutes b
 - **Telegram Updates:** The app is hooked up to Telegram! Major events (like someone joining a queue or a machine freeing up) will be broadcasted so you can stay in the loop.
 - **Announcements:** Keep an eye on the top of the dashboard. If the washing machines are under maintenance, the admin will post an announcement there.
 - **Usage Logs:** Curious who does laundry at 3 AM? You can check the "Usage Logs" in the sidebar menu to see the history of the machines.
+- **User Manual:** Need a refresher on how to use the app? You can always access this guide by clicking "User Manual" in the sidebar menu!
 
 **Be kind, respect the queue, and happy washing! 🫧👕**
 
