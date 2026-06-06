@@ -434,6 +434,9 @@ for i, machine_name in enumerate(MACHINES):
                          st.rerun()
 
                 with st.popover(f"Start ({queue[0]['name']})", use_container_width=True):
+                    c1, c2 = st.columns([1, 10])
+                    with c1:
+                        st.button("✖", key=f"x_q_{machine_name}", help="Close")
                     with st.form(f"st_form_{machine_name}"):
                         name = st.text_input("Name *")
                         desig = st.selectbox("Designation *", ["PhD", "PDF", "Project Student", "Visitor"], key=f"d1_{machine_name}")
@@ -461,6 +464,9 @@ for i, machine_name in enumerate(MACHINES):
                                 st.rerun()
             else:
                 with st.popover("Start Machine", use_container_width=True):
+                    c1, c2 = st.columns([1, 10])
+                    with c1:
+                        st.button("✖", key=f"x_f_{machine_name}", help="Close")
                     with st.form(f"free_st_{machine_name}"):
                         name = st.text_input("Name *")
                         desig = st.selectbox("Designation *", ["PhD","PDF","Project Student", "Visitor"], key=f"d2_{machine_name}")
@@ -486,6 +492,9 @@ for i, machine_name in enumerate(MACHINES):
 
             if show_join:
                 with st.popover("Join Queue", use_container_width=True):
+                    c1, c2 = st.columns([1, 10])
+                    with c1:
+                        st.button("✖", key=f"x_j_{machine_name}", help="Close")
                     with st.form(f"join_form_{machine_name}"):
                         q_name = st.text_input("Name *", key=f"qn_{machine_name}")
                         q_desig = st.selectbox("Designation *", ["PhD", "PDF", "Project Student", "Visitor"], key=f"qd_{machine_name}")
@@ -566,7 +575,7 @@ custom_js = """
                 form.setAttribute('data-validation-bound', 'true');
                 
                 const textInputs = form.querySelectorAll('input[type="text"], input[type="password"]');
-                const submitBtn = form.querySelector('button');
+                const submitBtn = form.querySelector('div[data-testid="stFormSubmitButton"] button');
                 
                 if (submitBtn) {
                     const checkInputs = () => {
@@ -640,8 +649,7 @@ custom_js = """
             const selectboxes = form.querySelectorAll('div[data-testid="stSelectbox"]');
             let durationSelectWrapper = null;
             selectboxes.forEach(wrapper => {
-                const label = wrapper.querySelector('label');
-                if (label && label.innerText.includes('Duration')) {
+                if (wrapper.innerText.includes('Duration (mins)')) {
                     durationSelectWrapper = wrapper;
                 }
             });
@@ -649,14 +657,15 @@ custom_js = """
             const numberInputs = form.querySelectorAll('div[data-testid="stNumberInput"]');
             let customDurWrapper = null;
             numberInputs.forEach(wrapper => {
-                const label = wrapper.querySelector('label');
-                if (label && label.innerText.includes('Custom Duration')) {
+                if (wrapper.innerText.includes('Custom Duration')) {
                     customDurWrapper = wrapper;
                 }
             });
             
             if (durationSelectWrapper && customDurWrapper) {
-                if (durationSelectWrapper.innerText.includes('Custom')) {
+                // Check if the actual selected value contains 'Custom'
+                const selectValueNode = durationSelectWrapper.querySelector('div[data-baseweb="select"]');
+                if (selectValueNode && selectValueNode.innerText.includes('Custom')) {
                     customDurWrapper.style.display = 'block';
                 } else {
                     customDurWrapper.style.display = 'none';
@@ -669,7 +678,7 @@ custom_js = """
 <style>
 /* CSS Hack for st.popover full-screen overlay on mobile */
 @media (max-width: 768px) {
-    div[data-testid="stPopoverBody"] {
+    div[data-testid="stPopoverBody"], div[role="dialog"] {
         position: fixed !important;
         top: 0 !important;
         bottom: 0 !important;
