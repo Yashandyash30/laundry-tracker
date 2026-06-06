@@ -239,6 +239,12 @@ for i, machine_name in enumerate(MACHINES):
                     else:
                         st.error(f"⚠️ {queue[0]['name']} timed out.")
                         timeout_happened = True
+                        
+                        if len(queue) == 1:
+                            timed_out_user = queue.pop(0)
+                            doc_ref.update({"queue": queue, "last_free_time": get_current_time().isoformat()})
+                            send_telegram(f"⚠️ *Queue Alert*\n{timed_out_user['name']} timed out and was automatically removed from the queue for {machine_name}.")
+                            st.rerun()
 
             # --- QUEUE DISPLAY ---
             if queue:
@@ -284,9 +290,9 @@ for i, machine_name in enumerate(MACHINES):
                 if timeout_happened and len(queue) > 1:
                     st.write(f"**{queue[0]['name']} missed their turn.**")
                     if st.button(f"🚀 Skip to {queue[1]['name']}", key=f"skip_{machine_name}"):
-                         queue.pop(0)
+                         timed_out_user = queue.pop(0)
                          doc_ref.update({"queue": queue, "last_free_time": get_current_time().isoformat()})
-                         send_telegram(f"⚠️ *Queue Alert*\n{queue[0]['name']} timed out.\n👉 Next: {queue[1]['name']} starts now.")
+                         send_telegram(f"⚠️ *Queue Alert*\n{timed_out_user['name']} timed out.\n👉 Next: {queue[0]['name']} starts now.")
                          st.rerun()
 
                 with st.popover(f"Start ({queue[0]['name']})", use_container_width=True):
