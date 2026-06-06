@@ -91,6 +91,19 @@ def format_time(dt):
         dt = datetime.fromisoformat(dt)
     return dt.strftime("%I:%M %p")
 
+def add_log(hostel, machine, user, designation, duration_mins):
+    try:
+        log_data = {
+            "timestamp": get_current_time().isoformat(),
+            "machine": machine,
+            "user": user,
+            "designation": designation,
+            "duration_mins": duration_mins
+        }
+        db.collection(f"{hostel}_logs").add(log_data)
+    except Exception as e:
+        print(f"Log error: {e}")
+
 # Initialize Session State for Change Detection
 if 'machine_states' not in st.session_state:
     st.session_state['machine_states'] = {}
@@ -98,18 +111,17 @@ if 'machine_states' not in st.session_state:
 # --- 5. APP INTERFACE ---
 st.set_page_config(page_title="Hostel Laundry", page_icon="🧺", layout="wide")
 
-st.title("🧺 ARIES Laundry Tracker")
+st.markdown("<h2 style='margin-top: -50px; margin-bottom: -15px;'>🧺 ARIES Laundry Tracker</h2>", unsafe_allow_html=True)
 st.caption("Live Status • Telegram Alerts • Browser Notifications")
 
-# Move location selector to the main screen to prevent accidental wrong hostel selection
-st.markdown("### 📍 Select Your Hostel")
 selected_hostel = st.radio(
-    "Choose your location:", 
+    "**📍 Select Your Hostel:**", 
     ["Kritika Hostel", "Rohini Hostel"], 
     index=None, 
     horizontal=True,
     key="hostel_selector"
 )
+st.write("")
 
 if not selected_hostel:
     st.info("👆 Please select your hostel above to view the laundry machines.")
@@ -329,7 +341,7 @@ for i, machine_name in enumerate(MACHINES):
                     with st.form(f"st_form_{machine_name}"):
                         name = st.text_input("Name")
                         desig = st.selectbox("Designation", ["PhD", "PDF", "Project Student", "Visitor"], key=f"d1_{machine_name}")
-                        duration = st.slider("Duration", 15, 120, 45, key=f"dur1_{machine_name}")
+                        duration = st.number_input("Duration (mins)", min_value=15, max_value=200, value=45, step=5, key=f"dur1_{machine_name}")
                         comment = st.text_input("Comment (Optional)", key=f"c1_{machine_name}")
                         pin = st.text_input("PIN", type="password", key=f"p1_{machine_name}")
                         if st.form_submit_button("Start"):
@@ -340,6 +352,7 @@ for i, machine_name in enumerate(MACHINES):
                                 end_val = get_current_time() + timedelta(minutes=duration)
                                 user_data = {"name": name, "designation": desig, "comment": comment, "pin": pin, "start_time": get_current_time().isoformat(), "end_time": end_val.isoformat(), "timeout_alert_sent": False}
                                 doc_ref.set({"current_user": user_data, "queue": queue})
+                                add_log(DB_COLLECTION, machine_name, name, desig, duration)
                                 send_telegram(f"🧺 *{machine_name} Started*\n👤 User: {name}\n⏱ Duration: {duration} mins", selected_hostel)
                                 st.rerun()
             else:
@@ -347,13 +360,14 @@ for i, machine_name in enumerate(MACHINES):
                     with st.form(f"free_st_{machine_name}"):
                         name = st.text_input("Name")
                         desig = st.selectbox("Designation", ["PhD","PDF","Project Student", "Visitor"], key=f"d2_{machine_name}")
-                        duration = st.slider("Duration", 15, 120, 45, key=f"dur2_{machine_name}")
+                        duration = st.number_input("Duration (mins)", min_value=15, max_value=200, value=45, step=5, key=f"dur2_{machine_name}")
                         comment = st.text_input("Comment (Optional)", key=f"c2_{machine_name}")
                         pin = st.text_input("PIN", type="password", key=f"p2_{machine_name}")
                         if st.form_submit_button("Start"):
                             end_val = get_current_time() + timedelta(minutes=duration)
                             user_data = {"name": name, "designation": desig, "comment": comment, "pin": pin, "start_time": get_current_time().isoformat(), "end_time": end_val.isoformat(), "timeout_alert_sent": False}
                             doc_ref.set({"current_user": user_data, "queue": queue})
+                            add_log(DB_COLLECTION, machine_name, name, desig, duration)
                             send_telegram(f"🧺 *{machine_name} Started*\n👤 User: {name}\n⏱ Duration: {duration} mins", selected_hostel)
                             st.rerun()
 
@@ -375,3 +389,26 @@ for i, machine_name in enumerate(MACHINES):
                             if q_is_urgent: alert += f"\n🔥 *URGENT*: {q_reason}"
                             send_telegram(alert, selected_hostel)
                             st.rerun()
+
+if selected_hostel:
+    st.divider()
+    with st.expander("📜 Usage Logs (Last 50 Entries)"):
+        try:
+            logs_ref = db.collection(f"{DB_COLLECTION}_logs").order_by("timestamp", direction=firestore.Query.DESCENDING).limit(50)
+            logs = [doc.to_dict() for doc in logs_ref.stream()]
+            if logs:
+                formatted_logs = []
+                for log in logs:
+                    dt_obj = datetime.fromisoformat(log.get('timestamp', get_current_time().isoformat()))
+                    formatted_logs.append({
+                        "Date & Time": dt_obj.strftime("%Y-%m-%d %I:%M %p"),
+                        "Machine": log.get("machine", ""),
+                        "User": log.get("user", ""),
+                        "Designation": log.get("designation", ""),
+                        "Duration (mins)": log.get("duration_mins", "")
+                    })
+                st.dataframe(formatted_logs, use_container_width=True, hide_index=True)
+            else:
+                st.info("No logs found for this hostel.")
+        except Exception as e:
+            st.error(f"Could not load logs: {e}")
