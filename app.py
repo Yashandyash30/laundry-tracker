@@ -330,7 +330,7 @@ for i, machine_name in enumerate(MACHINES):
                     st.info(f"📝 Note: {current_user['comment']}")
                 
                 with st.expander("⚙️ Finish early / Extend time"):
-                    pin_input = st.text_input("PIN", type="password", key=f"pin_{machine_name}")
+                    pin_input = st.text_input("PIN *", type="password", key=f"pin_{machine_name}")
                     add_time = st.number_input("Add Mins", min_value=5, value=15, step=5, key=f"time_{machine_name}")
                     
                     c1, c2 = st.columns(2)
@@ -507,58 +507,128 @@ custom_js = """
     // --- ACCORDION LOGIC ---
     const details = doc.querySelectorAll('div[data-testid="stExpander"] details');
     details.forEach((targetDetail, index) => {
-        targetDetail.setAttribute('name', 'laundry_accordion');
         const savedIndex = sessionStorage.getItem('open_expander');
+        
+        // Restore state on reload
         if (savedIndex !== null) {
-            if (parseInt(savedIndex) === index) targetDetail.setAttribute('open', '');
-            else targetDetail.removeAttribute('open');
+            const shouldBeOpen = parseInt(savedIndex) === index;
+            const isOpen = targetDetail.hasAttribute('open');
+            if (shouldBeOpen && !isOpen) {
+                const summary = targetDetail.querySelector('summary');
+                if (summary) summary.click();
+            } else if (!shouldBeOpen && isOpen) {
+                const summary = targetDetail.querySelector('summary');
+                if (summary) summary.click();
+            }
         }
+        
+        // Enforce accordion behavior on manual clicks
         if (!targetDetail.hasAttribute('data-accordion-bound')) {
             targetDetail.setAttribute('data-accordion-bound', 'true');
-            targetDetail.addEventListener('click', () => {
-                setTimeout(() => {
-                    if (targetDetail.hasAttribute('open')) sessionStorage.setItem('open_expander', index);
-                    else if (sessionStorage.getItem('open_expander') == index) sessionStorage.removeItem('open_expander');
-                }, 10);
-            });
+            
+            const summary = targetDetail.querySelector('summary');
+            if (summary) {
+                summary.addEventListener('click', (e) => {
+                    const isOpening = !targetDetail.hasAttribute('open');
+                    
+                    if (isOpening) {
+                        sessionStorage.setItem('open_expander', index);
+                        // Close all others via React click
+                        details.forEach((d, i) => {
+                            if (i !== index && d.hasAttribute('open')) {
+                                const otherSummary = d.querySelector('summary');
+                                if (otherSummary) otherSummary.click();
+                            }
+                        });
+                    } else {
+                        if (sessionStorage.getItem('open_expander') == index) {
+                            sessionStorage.removeItem('open_expander');
+                        }
+                    }
+                });
+            }
         }
     });
 
     // --- DYNAMIC FORM VALIDATION ---
-    doc.querySelectorAll('div[data-testid="stForm"]').forEach(form => {
-        const textInputs = form.querySelectorAll('input[type="text"], input[type="password"]');
-        const submitBtn = form.querySelector('button[kind="formSubmit"]');
-        
-        if (submitBtn && !form.hasAttribute('data-validation-bound')) {
-            form.setAttribute('data-validation-bound', 'true');
-            
-            const checkInputs = () => {
-                let isValid = true;
-                textInputs.forEach(inp => {
-                    const labelText = inp.getAttribute('aria-label') || '';
-                    if (labelText.includes('*') && inp.value.trim() === '') {
-                        isValid = false;
-                    }
-                });
-                submitBtn.disabled = !isValid;
-                if (isValid) {
-                    submitBtn.style.backgroundColor = '#28a745'; // Green
-                    submitBtn.style.color = 'white';
-                    submitBtn.style.borderColor = '#28a745';
-                } else {
-                    submitBtn.style.backgroundColor = '';
-                    submitBtn.style.color = '';
-                    submitBtn.style.borderColor = '';
+    const observer = new MutationObserver(() => {
+        // 1. FORMS (Start Machine, Join Queue)
+        doc.querySelectorAll('div[data-testid="stForm"]').forEach(form => {
+            if (!form.hasAttribute('data-validation-bound')) {
+                form.setAttribute('data-validation-bound', 'true');
+                
+                const textInputs = form.querySelectorAll('input[type="text"], input[type="password"]');
+                const submitBtn = form.querySelector('button[kind="formSubmit"]');
+                
+                if (submitBtn) {
+                    const checkInputs = () => {
+                        let isValid = true;
+                        textInputs.forEach(inp => {
+                            const wrapper = inp.closest('div[data-testid="stTextInput"]');
+                            if (wrapper) {
+                                const label = wrapper.querySelector('label');
+                                if (label && label.innerText.includes('*') && inp.value.trim() === '') {
+                                    isValid = false;
+                                }
+                            }
+                        });
+                        
+                        submitBtn.disabled = !isValid;
+                        if (isValid) {
+                            submitBtn.style.setProperty('background-color', '#28a745', 'important');
+                            submitBtn.style.setProperty('color', 'white', 'important');
+                            submitBtn.style.setProperty('border-color', '#28a745', 'important');
+                        } else {
+                            submitBtn.style.removeProperty('background-color');
+                            submitBtn.style.removeProperty('color');
+                            submitBtn.style.removeProperty('border-color');
+                        }
+                    };
+                    
+                    checkInputs();
+                    textInputs.forEach(inp => inp.addEventListener('input', checkInputs));
                 }
-            };
-            
-            // Initial check
-            checkInputs();
-            
-            // Check on every keystroke
-            textInputs.forEach(inp => inp.addEventListener('input', checkInputs));
-        }
+            }
+        });
+
+        // 2. EXPANDERS (Finish Early / Add Time)
+        doc.querySelectorAll('div[data-testid="stExpander"]').forEach(exp => {
+            if (!exp.hasAttribute('data-validation-bound')) {
+                const pinInputWrapper = Array.from(exp.querySelectorAll('div[data-testid="stTextInput"]')).find(w => {
+                    const l = w.querySelector('label');
+                    return l && l.innerText.includes('PIN *');
+                });
+                
+                if (pinInputWrapper) {
+                    exp.setAttribute('data-validation-bound', 'true');
+                    const pinInput = pinInputWrapper.querySelector('input[type="password"], input[type="text"]');
+                    const buttons = exp.querySelectorAll('button[kind="secondary"]');
+                    
+                    if (pinInput && buttons.length > 0) {
+                        const checkExpInputs = () => {
+                            const isValid = pinInput.value.trim() !== '';
+                            buttons.forEach(btn => {
+                                btn.disabled = !isValid;
+                                if (isValid) {
+                                    btn.style.setProperty('background-color', '#28a745', 'important');
+                                    btn.style.setProperty('color', 'white', 'important');
+                                    btn.style.setProperty('border-color', '#28a745', 'important');
+                                } else {
+                                    btn.style.removeProperty('background-color');
+                                    btn.style.removeProperty('color');
+                                    btn.style.removeProperty('border-color');
+                                }
+                            });
+                        };
+                        checkExpInputs();
+                        pinInput.addEventListener('input', checkExpInputs);
+                    }
+                }
+            }
+        });
     });
+
+    observer.observe(doc.body, { childList: true, subtree: true });
 </script>
 """
 components.html(custom_js, height=0)
