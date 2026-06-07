@@ -255,7 +255,7 @@ if selected_hostel == "Kritika Hostel":
     MACHINES = ["Kritika Washer (Floor 3)", "Kritika Washer (Floor 2)", "Kritika Dryer (Floor 1)"]
 else:
     DB_COLLECTION = "machines_rohini"
-    MACHINES = ["Rohini Washer 1", "Rohini Washer 2", "Rohini Dryer"]
+    MACHINES = ["Rohini Washer (GF1)", "Rohini washer (GF2)", "Rohini Washer (UF)", "Rohini Dryer"]
 
 if st.session_state.get('active_action'):
     action = st.session_state['active_action']
