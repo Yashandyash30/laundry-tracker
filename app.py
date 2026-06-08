@@ -317,7 +317,84 @@ elif selected_category == "Pantry":
     p_data = doc_snap.to_dict() if doc_snap.exists else {}
     
     current_user = p_data.get("current_user", None)
-    
+    queue = p_data.get("queue", [])
+    last_free_time_str = p_data.get("last_free_time", None)
+
+    # State: Join Queue
+    if st.session_state.get('pantry_action') == 'Join Queue':
+        st.markdown("### Join Pantry Queue")
+        with st.container(border=True):
+            q_name = st.text_input("Name *")
+            q_desig = st.selectbox("Designation *", ["PhD", "PDF", "Project Student", "Visitor"])
+            q_comment = st.text_input("Comment (Optional)", placeholder="e.g., Making tea")
+            q_is_urgent = st.checkbox("🔥 Urgent?")
+            q_reason = st.text_input("Reason") if q_is_urgent else ""
+            q_pin = st.text_input("PIN *", type="password")
+            
+            c1, c2 = st.columns(2)
+            with c1:
+                submitted = st.button("Confirm", use_container_width=True, type="primary")
+            with c2:
+                if st.button("✖ Cancel", use_container_width=True):
+                    st.session_state['pantry_action'] = None
+                    st.rerun()
+
+        if submitted:
+            if not q_name.strip() or not q_pin.strip():
+                st.error("⚠️ Please fill in all mandatory fields (Name and PIN).")
+            else:
+                data = {"name": q_name, "designation": q_desig, "comment": q_comment, "pin": q_pin, "urgent": q_is_urgent, "urgent_reason": q_reason}
+                doc_ref.update({"queue": firestore.ArrayUnion([data])})
+                alert = f"🍳 *Pantry Queue Update*\n👤 User: {q_name} joined queue for Pantry."
+                if q_comment.strip(): alert += f"\n📝 *Note:* _{q_comment.strip()}_"
+                if q_is_urgent: alert += f"\n🔥 *URGENT*: {q_reason}"
+                send_telegram(alert, selected_hostel)
+                st.session_state['pantry_action'] = None
+                st.rerun()
+        st.stop()
+
+    # State: Start Queue
+    if st.session_state.get('pantry_action') == 'Start Queue':
+        st.markdown(f"### Start Using Pantry ({queue[0]['name']})")
+        with st.container(border=True):
+            sp_name = st.text_input("Name *", value=queue[0]['name'])
+            sp_desig = st.selectbox("Designation *", ["PhD", "PDF", "Project Student", "Visitor"], index=["PhD", "PDF", "Project Student", "Visitor"].index(queue[0]['designation']) if queue[0]['designation'] in ["PhD", "PDF", "Project Student", "Visitor"] else 0)
+            sp_comments = st.text_input("Comments (equipments used etc.)", value=queue[0].get('comment', ''))
+            sp_pin = st.text_input("PIN *", type="password")
+            
+            c1, c2 = st.columns(2)
+            with c1:
+                sp_submit = st.button("Mark as In Use", use_container_width=True, type="primary")
+            with c2:
+                if st.button("✖ Cancel", use_container_width=True):
+                    st.session_state['pantry_action'] = None
+                    st.rerun()
+
+        if sp_submit:
+            if not sp_name.strip() or not sp_pin.strip():
+                st.error("⚠️ Please fill in all mandatory fields (Name and PIN).")
+            elif sp_name.strip().lower() != queue[0]['name'].strip().lower():
+                st.error(f"Only {queue[0]['name']} can start!")
+            else:
+                queue.pop(0)
+                user_data = {
+                    "name": sp_name,
+                    "designation": sp_desig,
+                    "comments": sp_comments,
+                    "pin": sp_pin,
+                    "start_time": get_current_time().isoformat()
+                }
+                doc_ref.set({"current_user": user_data, "queue": queue})
+                msg = f"🍳 *Pantry In Use*\n👤 {sp_name}"
+                if sp_comments.strip():
+                    msg += f"\n📝 Equipment: {sp_comments}"
+                send_telegram(msg, selected_hostel)
+                st.session_state['pantry_action'] = None
+                st.rerun()
+        st.stop()
+
+    # Main Pantry View
+    timeout_happened = False
     if current_user:
         st.error(f"🔴 IN USE BY: {current_user['name']} ({current_user['designation']})")
         if current_user.get('comments'):
@@ -331,8 +408,10 @@ elif selected_category == "Pantry":
             
         if fin_submit:
             if fin_pin == current_user['pin'] or fin_pin == MASTER_PIN:
-                doc_ref.update({"current_user": firestore.DELETE_FIELD})
-                # Add log
+                doc_ref.update({
+                    "current_user": firestore.DELETE_FIELD,
+                    "last_free_time": get_current_time().isoformat()
+                })
                 start_dt = datetime.fromisoformat(current_user['start_time'])
                 duration = int((get_current_time() - start_dt).total_seconds() / 60)
                 log_data = {
@@ -343,38 +422,119 @@ elif selected_category == "Pantry":
                     "duration_mins": duration
                 }
                 db.collection(f"{hostel_id}_logs").add(log_data)
-                send_telegram(f"🍳 *Pantry Free*\n✅ {current_user['name']} finished cooking.", selected_hostel)
+                msg = f"🍳 *Pantry Free*\n✅ {current_user['name']} finished cooking."
+                if queue: msg += f"\n👉 Next: *{queue[0]['name']}*"
+                send_telegram(msg, selected_hostel)
+                trigger_browser_notification(f"[{selected_hostel}] ✅ Pantry Free!", "Pantry is available.")
                 st.rerun()
             else:
                 st.error("⚠️ Incorrect PIN.")
     else:
         st.success("🟢 PANTRY IS AVAILABLE")
-        st.markdown("### Start Using Pantry")
-        with st.form("start_pantry"):
-            sp_name = st.text_input("Name *")
-            sp_desig = st.selectbox("Designation *", ["PhD", "PDF", "Project Student", "Visitor"])
-            sp_comments = st.text_input("Comments (equipments used etc.)", placeholder="e.g., Induction stove, Pan")
-            sp_pin = st.text_input("PIN *", type="password")
+        effective_free_time = None
+        if last_free_time_str:
+            effective_free_time = datetime.fromisoformat(last_free_time_str)
+
+        if queue and effective_free_time:
+            buffer_deadline = effective_free_time + timedelta(minutes=BUFFER_MINUTES)
+            mins_left = int((buffer_deadline - get_current_time()).total_seconds() / 60)
             
-            sp_submit = st.form_submit_button("Mark as In Use", type="primary", use_container_width=True)
-            
-        if sp_submit:
-            if not sp_name.strip() or not sp_pin.strip():
-                st.error("⚠️ Please fill in all mandatory fields (Name and PIN).")
+            if mins_left > 0:
+                st.warning(f"⏳ **{queue[0]['name']}** has {mins_left} mins to claim.")
             else:
-                user_data = {
-                    "name": sp_name,
-                    "designation": sp_desig,
-                    "comments": sp_comments,
-                    "pin": sp_pin,
-                    "start_time": get_current_time().isoformat()
-                }
-                doc_ref.set({"current_user": user_data})
-                msg = f"🍳 *Pantry In Use*\n👤 {sp_name}"
-                if sp_comments.strip():
-                    msg += f"\n📝 Equipment: {sp_comments}"
-                send_telegram(msg, selected_hostel)
-                st.rerun()
+                st.error(f"⚠️ {queue[0]['name']} timed out.")
+                timeout_happened = True
+                
+                if len(queue) == 1:
+                    timed_out_user = queue.pop(0)
+                    doc_ref.update({"queue": queue, "last_free_time": get_current_time().isoformat()})
+                    send_telegram(f"⚠️ *Pantry Queue Alert*\n{timed_out_user['name']} timed out and was automatically removed from the queue.", selected_hostel)
+                    st.rerun()
+        
+        if not queue or (queue and timeout_happened and len(queue) == 1):
+            st.markdown("### Start Using Pantry")
+            with st.form("start_pantry"):
+                sp_name = st.text_input("Name *")
+                sp_desig = st.selectbox("Designation *", ["PhD", "PDF", "Project Student", "Visitor"])
+                sp_comments = st.text_input("Comments (equipments used etc.)", placeholder="e.g., Induction stove, Pan")
+                sp_pin = st.text_input("PIN *", type="password")
+                
+                sp_submit = st.form_submit_button("Mark as In Use", type="primary", use_container_width=True)
+                
+            if sp_submit:
+                if not sp_name.strip() or not sp_pin.strip():
+                    st.error("⚠️ Please fill in all mandatory fields (Name and PIN).")
+                else:
+                    user_data = {
+                        "name": sp_name,
+                        "designation": sp_desig,
+                        "comments": sp_comments,
+                        "pin": sp_pin,
+                        "start_time": get_current_time().isoformat()
+                    }
+                    doc_ref.set({"current_user": user_data, "queue": queue})
+                    msg = f"🍳 *Pantry In Use*\n👤 {sp_name}"
+                    if sp_comments.strip():
+                        msg += f"\n📝 Equipment: {sp_comments}"
+                    send_telegram(msg, selected_hostel)
+                    st.rerun()
+
+    # Queue Display
+    if queue:
+        st.divider()
+        st.write(f"**Queue ({len(queue)})**")
+        for idx, q_user in enumerate(queue):
+            urgency_icon = "🔥" if q_user.get('urgent') else ""
+            desig_str = q_user.get('designation', '')
+            name_str = f"{q_user['name']} ({desig_str})" if desig_str else q_user['name']
+            
+            with st.expander(f"{idx+1}. {name_str} {urgency_icon}"):
+                if q_user.get('urgent_reason'):
+                    st.markdown(f":fire: <span class='urgent-text'>{q_user['urgent_reason']}</span>", unsafe_allow_html=True)
+                if q_user.get('comment'):
+                    st.info(f"📝 Note: {q_user['comment']}")
+                
+                action_pin = st.text_input("PIN", type="password", key=f"qpin_pantry_{idx}")
+                c_swap, c_leave = st.columns(2)
+                
+                if idx < len(queue) - 1:
+                    if c_swap.button(f"▼ Swap Down", key=f"swap_pantry_{idx}"):
+                        if action_pin == q_user['pin'] or action_pin == MASTER_PIN:
+                            queue[idx], queue[idx+1] = queue[idx+1], queue[idx]
+                            doc_ref.update({"queue": queue})
+                            st.rerun()
+                
+                if c_leave.button("❌ Leave", key=f"lv_pantry_{idx}"):
+                    if action_pin == q_user['pin'] or action_pin == MASTER_PIN:
+                        queue.pop(idx)
+                        doc_ref.update({"queue": queue})
+                        st.rerun()
+
+    st.divider()
+    show_join = False
+    
+    if current_user:
+        show_join = True
+    elif queue:
+        show_join = True
+        
+        if timeout_happened and len(queue) > 1:
+            st.write(f"**{queue[0]['name']} missed their turn.**")
+            if st.button(f"🚀 Skip to {queue[1]['name']}", key="skip_pantry"):
+                 timed_out_user = queue.pop(0)
+                 doc_ref.update({"queue": queue, "last_free_time": get_current_time().isoformat()})
+                 send_telegram(f"⚠️ *Pantry Queue Alert*\n{timed_out_user['name']} timed out.\n👉 Next: {queue[0]['name']} starts now.", selected_hostel)
+                 st.rerun()
+
+        if st.button(f"Start ({queue[0]['name']})", use_container_width=True, key="btn_sq_pantry"):
+            st.session_state['pantry_action'] = 'Start Queue'
+            st.rerun()
+
+    if show_join:
+        if st.button("Join Queue", use_container_width=True, key="btn_jq_pantry"):
+            st.session_state['pantry_action'] = 'Join Queue'
+            st.rerun()
+
     st.stop()
 
 if selected_hostel == "Kritika Hostel":
