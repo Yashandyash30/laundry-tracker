@@ -401,10 +401,9 @@ elif selected_category == "Pantry":
             st.info(f"📝 Equipment Used / Comments: {current_user['comments']}")
         st.write(f"🕒 Started at: {format_time(current_user['start_time'])}")
         
-        st.markdown("### Finish Cooking")
-        with st.form("finish_pantry"):
-            fin_pin = st.text_input("PIN *", type="password")
-            fin_submit = st.form_submit_button("Mark as Not In Use", type="primary", use_container_width=True)
+        with st.expander("⚙️ Finish Cooking"):
+            fin_pin = st.text_input("PIN *", type="password", key="fin_pin_pantry")
+            fin_submit = st.button("Mark as Not In Use", type="primary", use_container_width=True, key="fin_submit_pantry")
             
         if fin_submit:
             if fin_pin == current_user['pin'] or fin_pin == MASTER_PIN:
