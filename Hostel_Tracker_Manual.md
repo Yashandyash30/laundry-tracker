@@ -1,10 +1,10 @@
-# 🧺 The Guide to the Hostel Laundry Tracker!
+# 🧺 The Guide to the Hostel Tracker!
 
-Here is everything you need to know to get your clothes washed without the headache using Hostel Laundry Tracker .
+Here is everything you need to know to get your clothes washed and keep track of other hostel amenities without the headache using Hostel Tracker.
 
 ### 1. 🏠 Getting Started
 1. **Open the App:** Head to the app link on your phone or laptop.
-2. **Select Your Hostel:** On the main Page (Dashboard) pick either **Kritika** or **Rohini** Hostel. After selecting your hostel all machines in your hostel and their status will be shown.
+2. **Select Your Hostel:** On the main Page (Dashboard) pick either **Kritika** or **Rohini** Hostel. After selecting your hostel, all machines, pantry items, and first aid status in your hostel will be shown. Note: Rohini hostel configuration now includes specific floor locations for machines!
 3. **Turn on Notifications:** If your browser asks for permission to send notifications, **allow it!** The app will ping you when your laundry is done or when a machine frees up.
 
 ---
@@ -35,12 +35,23 @@ Did your clothes wash faster than expected? Or do you need an extra 15 minutes b
 
 ---
 
+### 5. 🆕 New Features & Changelog
+We have been actively improving the app! Here are the latest updates:
+- **Expanded Tracking:** Support for **First Aid** and **Pantry** categories with logging and real-time status management.
+- **Rohini Updates:** Updated machine list for Rohini configuration with specific floor locations.
+- **Improved Announcements:** Added per-hostel announcement deletion and an improved UI layout.
+- **Documentation:** Added a User Manual page to sidebar navigation and a downloadable guide PDF.
+- **UI Enhancements:** Simplified document fetching, updated button styling, and removed mobile-specific CSS flex overrides for a better experience.
+- **General Fixes:** Improved clarity of manual synchronization notes and backend refactoring.
+
+---
+
 ### A Few Extra Cool Things
 - **Telegram Updates:** The app is hooked up to Telegram! Major events (like someone joining a queue or a machine freeing up) will be broadcasted so you can stay in the loop.
-- **Announcements:** Keep an eye on the top of the dashboard. If the washing machines are under maintenance, the admin will post an announcement there.
-- **Usage Logs:** Curious who does laundry at 3 AM? You can check the "Usage Logs" in the sidebar menu to see the history of the machines.
-- **User Manual:** Need a refresher on how to use the app? You can always access this guide by clicking "User Manual" in the sidebar menu!
+- **Announcements:** Keep an eye on the top of the dashboard. If the washing machines are under maintenance, the admin will post an announcement there. Announcements can now be deleted per-hostel!
+- **Usage Logs:** Curious who does laundry at 3 AM? You can check the "Usage Logs" in the sidebar menu to see the history of the machines. First Aid and Pantry logs are also available!
+- **User Manual:** Need a refresher on how to use the app? You can always access this guide by clicking "User Manual" in the sidebar menu! A PDF guide is also available.
 
-**Be kind, respect the queue, and happy washing! 🫧👕**
+**Be kind, respect the queue, and happy tracking! 🫧👕**
 
 > **📝 Note:** The app timer doesn't ensure that the physical machine timer will be in perfect synchronization. The washing machine timers work differently and it's possible that your cycle may finish on the app but not on the machine. In that case, please add time to the app (refer to point 4).

@@ -232,7 +232,7 @@ if page == "Usage Logs":
 
 if page == "User Manual":
     try:
-        with open("laundry_tracker_manual.md", "r", encoding="utf-8") as f:
+        with open("Hostel_Tracker_Manual.md", "r", encoding="utf-8") as f:
             manual_content = f.read()
         st.markdown(manual_content)
     except FileNotFoundError:
