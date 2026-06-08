@@ -131,41 +131,46 @@ if page == "Announcements":
         
     if auth_pin == MASTER_PIN:
         target_hostel = st.selectbox("Target Hostel", ["Kritika Hostel", "Rohini Hostel", "Both"])
+        target_category = st.selectbox("Target Category", ["Laundry", "First Aid", "Pantry", "All Categories"])
         msg = st.text_area("Announcement Message")
         
         if st.button("Publish"):
-            if target_hostel in ["Kritika Hostel", "Both"]:
-                db.collection("announcements").document("Kritika Hostel").set({"message": msg, "timestamp": get_current_time().isoformat()})
-            if target_hostel in ["Rohini Hostel", "Both"]:
-                db.collection("announcements").document("Rohini Hostel").set({"message": msg, "timestamp": get_current_time().isoformat()})
+            hostels = ["Kritika Hostel", "Rohini Hostel"] if target_hostel == "Both" else [target_hostel]
+            categories = ["Laundry", "First Aid", "Pantry"] if target_category == "All Categories" else [target_category]
+            
+            for h in hostels:
+                for c in categories:
+                    db.collection("announcements").document(f"{h}_{c}").set({"message": msg, "timestamp": get_current_time().isoformat()})
             st.success("Published!")
             
         st.write("---")
         st.write("### Current Announcements")
         try:
-            k_doc = db.collection("announcements").document("Kritika Hostel").get()
-            r_doc = db.collection("announcements").document("Rohini Hostel").get()
+            hostels = ["Kritika Hostel", "Rohini Hostel"]
+            categories = ["Laundry", "First Aid", "Pantry"]
             
-            c1, c2 = st.columns([4, 1])
-            with c1:
-                st.write(f"**Kritika:** {k_doc.to_dict().get('message') if k_doc.exists else 'None'}")
-            with c2:
-                if k_doc.exists and st.button("Clear Kritika", use_container_width=True):
-                    db.collection("announcements").document("Kritika Hostel").delete()
-                    st.rerun()
+            any_exists = False
+            for h in hostels:
+                st.write(f"#### {h}")
+                for c in categories:
+                    doc_id = f"{h}_{c}"
+                    doc = db.collection("announcements").document(doc_id).get()
                     
-            c1, c2 = st.columns([4, 1])
-            with c1:
-                st.write(f"**Rohini:** {r_doc.to_dict().get('message') if r_doc.exists else 'None'}")
-            with c2:
-                if r_doc.exists and st.button("Clear Rohini", use_container_width=True):
-                    db.collection("announcements").document("Rohini Hostel").delete()
-                    st.rerun()
+                    c1, c2 = st.columns([4, 1])
+                    with c1:
+                        st.write(f"**{c}:** {doc.to_dict().get('message') if doc.exists else 'None'}")
+                    with c2:
+                        if doc.exists:
+                            any_exists = True
+                            if st.button(f"Clear", key=f"clear_{doc_id}", use_container_width=True):
+                                db.collection("announcements").document(doc_id).delete()
+                                st.rerun()
             
             st.write("<br>", unsafe_allow_html=True)
-            if (k_doc.exists or r_doc.exists) and st.button("Clear All Announcements"):
-                db.collection("announcements").document("Kritika Hostel").delete()
-                db.collection("announcements").document("Rohini Hostel").delete()
+            if any_exists and st.button("Clear All Announcements"):
+                for h in hostels:
+                    for c in categories:
+                        db.collection("announcements").document(f"{h}_{c}").delete()
                 st.rerun()
         except Exception:
             pass
@@ -269,11 +274,19 @@ if not selected_hostel or not selected_category:
     st.stop()
 
 try:
-    announcement_doc = db.collection("announcements").document(selected_hostel).get()
+    doc_id = f"{selected_hostel}_{selected_category}"
+    announcement_doc = db.collection("announcements").document(doc_id).get()
     if announcement_doc.exists:
         ann_data = announcement_doc.to_dict()
         if ann_data and ann_data.get("message"):
-            st.warning(f"📢 **Announcement:** {ann_data['message']}")
+            st.warning(f"📢 **{selected_category} Announcement:** {ann_data['message']}")
+            
+    # Fallback to check generic hostel announcement for backward compatibility
+    gen_doc = db.collection("announcements").document(selected_hostel).get()
+    if gen_doc.exists:
+        gen_data = gen_doc.to_dict()
+        if gen_data and gen_data.get("message"):
+            st.warning(f"📢 **Hostel Announcement:** {gen_data['message']}")
 except Exception:
     pass
 

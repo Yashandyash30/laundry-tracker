@@ -41,8 +41,6 @@ We have been actively improving the app! Here are the latest updates:
 - **Rohini Updates:** Updated machine list for Rohini configuration with specific floor locations.
 - **Improved Announcements:** Added per-hostel announcement deletion and an improved UI layout.
 - **Documentation:** Added a User Manual page to sidebar navigation and a downloadable guide PDF.
-- **UI Enhancements:** Simplified document fetching, updated button styling, and removed mobile-specific CSS flex overrides for a better experience.
-- **General Fixes:** Improved clarity of manual synchronization notes and backend refactoring.
 
 ---
 
