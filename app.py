@@ -178,10 +178,17 @@ if page == "Usage Logs":
     st.write("<br>", unsafe_allow_html=True)
     
     log_hostel = st.radio("**Select Hostel to view logs:**", ["Kritika Hostel", "Rohini Hostel"], horizontal=True)
+    log_category = st.radio("**Select Category:**", ["Laundry", "First Aid", "Pantry"], horizontal=True)
     limit_choice = st.selectbox("Show last N logs:", [50, 100, 500, "All"])
     
-    if log_hostel:
-        hostel_col = "machines_kritika" if log_hostel == "Kritika Hostel" else "machines_rohini"
+    if log_hostel and log_category:
+        if log_category == "Laundry":
+            hostel_col = "machines_kritika" if log_hostel == "Kritika Hostel" else "machines_rohini"
+        elif log_category == "First Aid":
+            hostel_col = "firstaid_kritika" if log_hostel == "Kritika Hostel" else "firstaid_rohini"
+        elif log_category == "Pantry":
+            hostel_col = "pantry_kritika" if log_hostel == "Kritika Hostel" else "pantry_rohini"
+            
         try:
             if limit_choice == "All":
                 logs_ref = db.collection(f"{hostel_col}_logs").order_by("timestamp", direction=firestore.Query.DESCENDING)
@@ -193,16 +200,32 @@ if page == "Usage Logs":
                 formatted_logs = []
                 for log in logs:
                     dt_obj = datetime.fromisoformat(log.get('timestamp', get_current_time().isoformat()))
-                    formatted_logs.append({
-                        "Date & Time": dt_obj.strftime("%Y-%m-%d %I:%M %p"),
-                        "Machine": log.get("machine", ""),
-                        "User": log.get("user", ""),
-                        "Designation": log.get("designation", ""),
-                        "Duration (mins)": log.get("duration_mins", "")
-                    })
+                    if log_category == "Laundry":
+                        formatted_logs.append({
+                            "Date & Time": dt_obj.strftime("%Y-%m-%d %I:%M %p"),
+                            "Machine": log.get("machine", ""),
+                            "User": log.get("user", ""),
+                            "Designation": log.get("designation", ""),
+                            "Duration (mins)": log.get("duration_mins", "")
+                        })
+                    elif log_category == "First Aid":
+                        formatted_logs.append({
+                            "Date & Time": dt_obj.strftime("%Y-%m-%d %I:%M %p"),
+                            "User": log.get("user", ""),
+                            "Designation": log.get("designation", ""),
+                            "Things Used": log.get("things_used", "")
+                        })
+                    elif log_category == "Pantry":
+                        formatted_logs.append({
+                            "Date & Time": dt_obj.strftime("%Y-%m-%d %I:%M %p"),
+                            "User": log.get("user", ""),
+                            "Designation": log.get("designation", ""),
+                            "Comments": log.get("comments", ""),
+                            "Duration (mins)": log.get("duration_mins", "")
+                        })
                 st.dataframe(formatted_logs, use_container_width=True, hide_index=True)
             else:
-                st.info("No logs found for this hostel.")
+                st.info("No logs found for this category and hostel.")
         except Exception as e:
             st.error(f"Could not load logs: {e}")
     st.stop()
@@ -216,7 +239,7 @@ if page == "User Manual":
         st.error("Manual file not found.")
     st.stop()
 
-st.markdown("<h2 style='margin-top: -50px; margin-bottom: -15px;'>🧺 ARIES Laundry Tracker</h2>", unsafe_allow_html=True)
+st.markdown("<h3 style='margin-top: -50px; margin-bottom: -15px;'>🏢 ARIES Hostel Tracker</h3>", unsafe_allow_html=True)
 st.caption("Live Status • Telegram Alerts • Browser Notifications")
 
 selected_hostel = st.radio(
@@ -226,10 +249,20 @@ selected_hostel = st.radio(
     horizontal=True,
     key="hostel_selector"
 )
+
+selected_category = None
+if selected_hostel:
+    selected_category = st.radio(
+        "**📂 Select Category:**",
+        ["Laundry", "First Aid", "Pantry"],
+        horizontal=True,
+        key="category_selector"
+    )
+
 st.write("")
 
-if not selected_hostel:
-    st.info("👆 Please select your hostel above to view the laundry machines.")
+if not selected_hostel or not selected_category:
+    st.info("👆 Please select your hostel and category above.")
     with st.sidebar:
         st.write("### ⚙️ Settings")
         request_permission_button()
@@ -249,6 +282,100 @@ with st.sidebar:
     st.write("---")
     st.write("### ⚙️ Settings")
     request_permission_button()
+
+if selected_category == "First Aid":
+    st.markdown("## 🩹 First Aid Kit Log")
+    st.write("Please log the items you have used from the First Aid Kit.")
+    with st.form("first_aid_form"):
+        fa_name = st.text_input("Name *")
+        fa_desig = st.selectbox("Designation *", ["PhD", "PDF", "Project Student", "Visitor"])
+        fa_used = st.text_area("Things Used (Comments) *", placeholder="e.g., Band-Aids, Antiseptic cream")
+        
+        fa_submit = st.form_submit_button("Log Usage", type="primary", use_container_width=True)
+        
+    if fa_submit:
+        if not fa_name.strip() or not fa_used.strip():
+            st.error("⚠️ Please fill in all mandatory fields (Name and Things Used).")
+        else:
+            hostel_col = "firstaid_kritika" if selected_hostel == "Kritika Hostel" else "firstaid_rohini"
+            log_data = {
+                "timestamp": get_current_time().isoformat(),
+                "user": fa_name,
+                "designation": fa_desig,
+                "things_used": fa_used
+            }
+            db.collection(f"{hostel_col}_logs").add(log_data)
+            st.success("✅ Logged successfully!")
+            send_telegram(f"🩹 *First Aid Kit Used*\n👤 {fa_name}\n📝 Used: {fa_used}", selected_hostel)
+    st.stop()
+
+elif selected_category == "Pantry":
+    st.markdown("## 🍳 Pantry Tracker")
+    hostel_id = "pantry_kritika" if selected_hostel == "Kritika Hostel" else "pantry_rohini"
+    doc_ref = db.collection("pantry").document(hostel_id)
+    doc_snap = doc_ref.get()
+    p_data = doc_snap.to_dict() if doc_snap.exists else {}
+    
+    current_user = p_data.get("current_user", None)
+    
+    if current_user:
+        st.error(f"🔴 IN USE BY: {current_user['name']} ({current_user['designation']})")
+        if current_user.get('comments'):
+            st.info(f"📝 Equipment Used / Comments: {current_user['comments']}")
+        st.write(f"🕒 Started at: {format_time(current_user['start_time'])}")
+        
+        st.markdown("### Finish Cooking")
+        with st.form("finish_pantry"):
+            fin_pin = st.text_input("PIN *", type="password")
+            fin_submit = st.form_submit_button("Mark as Not In Use", type="primary", use_container_width=True)
+            
+        if fin_submit:
+            if fin_pin == current_user['pin'] or fin_pin == MASTER_PIN:
+                doc_ref.update({"current_user": firestore.DELETE_FIELD})
+                # Add log
+                start_dt = datetime.fromisoformat(current_user['start_time'])
+                duration = int((get_current_time() - start_dt).total_seconds() / 60)
+                log_data = {
+                    "timestamp": get_current_time().isoformat(),
+                    "user": current_user['name'],
+                    "designation": current_user['designation'],
+                    "comments": current_user['comments'],
+                    "duration_mins": duration
+                }
+                db.collection(f"{hostel_id}_logs").add(log_data)
+                send_telegram(f"🍳 *Pantry Free*\n✅ {current_user['name']} finished cooking.", selected_hostel)
+                st.rerun()
+            else:
+                st.error("⚠️ Incorrect PIN.")
+    else:
+        st.success("🟢 PANTRY IS AVAILABLE")
+        st.markdown("### Start Using Pantry")
+        with st.form("start_pantry"):
+            sp_name = st.text_input("Name *")
+            sp_desig = st.selectbox("Designation *", ["PhD", "PDF", "Project Student", "Visitor"])
+            sp_comments = st.text_input("Comments (equipments used etc.)", placeholder="e.g., Induction stove, Pan")
+            sp_pin = st.text_input("PIN *", type="password")
+            
+            sp_submit = st.form_submit_button("Mark as In Use", type="primary", use_container_width=True)
+            
+        if sp_submit:
+            if not sp_name.strip() or not sp_pin.strip():
+                st.error("⚠️ Please fill in all mandatory fields (Name and PIN).")
+            else:
+                user_data = {
+                    "name": sp_name,
+                    "designation": sp_desig,
+                    "comments": sp_comments,
+                    "pin": sp_pin,
+                    "start_time": get_current_time().isoformat()
+                }
+                doc_ref.set({"current_user": user_data})
+                msg = f"🍳 *Pantry In Use*\n👤 {sp_name}"
+                if sp_comments.strip():
+                    msg += f"\n📝 Equipment: {sp_comments}"
+                send_telegram(msg, selected_hostel)
+                st.rerun()
+    st.stop()
 
 if selected_hostel == "Kritika Hostel":
     DB_COLLECTION = "machines_kritika"
