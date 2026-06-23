@@ -5,16 +5,24 @@ from firebase_admin import credentials, firestore
 from datetime import datetime, timedelta
 import pytz
 import requests
-import pandas as pd
 from streamlit_autorefresh import st_autorefresh
 
-# --- 1. SETUP FIREBASE ---
-if not firebase_admin._apps:
-    key_dict = dict(st.secrets["firebase"])
-    cred = credentials.Certificate(key_dict)
-    firebase_admin.initialize_app(cred)
+# --- 0. APP CONFIGURATION ---
+SHOW_ROHINI_HOSTEL = False
+HOSTELS = ["Kritika Hostel"]
+if SHOW_ROHINI_HOSTEL:
+    HOSTELS.append("Rohini Hostel")
 
-db = firestore.client()
+# --- 1. SETUP FIREBASE ---
+@st.cache_resource
+def get_db():
+    if not firebase_admin._apps:
+        key_dict = dict(st.secrets["firebase"])
+        cred = credentials.Certificate(key_dict)
+        firebase_admin.initialize_app(cred)
+    return firestore.client()
+
+db = get_db()
 
 if 'active_action' not in st.session_state:
     st.session_state['active_action'] = None
@@ -130,12 +138,15 @@ if page == "Announcements":
         auth_submit = st.form_submit_button("Enter")
         
     if auth_pin == MASTER_PIN:
-        target_hostel = st.selectbox("Target Hostel", ["Kritika Hostel", "Rohini Hostel", "Both"])
+        target_options = list(HOSTELS)
+        if len(HOSTELS) > 1:
+            target_options.append("Both")
+        target_hostel = st.selectbox("Target Hostel", target_options)
         target_category = st.selectbox("Target Category", ["Laundry", "First Aid", "Pantry", "All Categories"])
         msg = st.text_area("Announcement Message")
         
         if st.button("Publish"):
-            hostels = ["Kritika Hostel", "Rohini Hostel"] if target_hostel == "Both" else [target_hostel]
+            hostels = HOSTELS if target_hostel == "Both" else [target_hostel]
             categories = ["Laundry", "First Aid", "Pantry"] if target_category == "All Categories" else [target_category]
             
             for h in hostels:
@@ -146,7 +157,7 @@ if page == "Announcements":
         st.write("---")
         st.write("### Current Announcements")
         try:
-            hostels = ["Kritika Hostel", "Rohini Hostel"]
+            hostels = HOSTELS
             categories = ["Laundry", "First Aid", "Pantry"]
             
             any_exists = False
@@ -182,7 +193,7 @@ if page == "Usage Logs":
     st.markdown("<h2 style='margin-top: -50px; margin-bottom: -15px;'>📜 Usage Logs</h2>", unsafe_allow_html=True)
     st.write("<br>", unsafe_allow_html=True)
     
-    log_hostel = st.radio("**Select Hostel to view logs:**", ["Kritika Hostel", "Rohini Hostel"], horizontal=True)
+    log_hostel = st.radio("**Select Hostel to view logs:**", HOSTELS, horizontal=True)
     log_category = st.radio("**Select Category:**", ["Laundry", "First Aid", "Pantry"], horizontal=True)
     limit_choice = st.selectbox("Show last N logs:", [50, 100, 500, "All"])
     
@@ -249,29 +260,21 @@ st.caption("Live Status • Telegram Alerts • Browser Notifications")
 
 selected_hostel = st.radio(
     "**📍 Select Your Hostel:**", 
-    ["Kritika Hostel", "Rohini Hostel"], 
-    index=None, 
+    HOSTELS, 
+    index=0, 
     horizontal=True,
     key="hostel_selector"
 )
 
-selected_category = None
-if selected_hostel:
-    selected_category = st.radio(
-        "**📂 Select Category:**",
-        ["Laundry", "First Aid", "Pantry"],
-        horizontal=True,
-        key="category_selector"
-    )
+selected_category = st.radio(
+    "**📂 Select Category:**",
+    ["Laundry", "First Aid", "Pantry"],
+    index=0,
+    horizontal=True,
+    key="category_selector"
+)
 
 st.write("")
-
-if not selected_hostel or not selected_category:
-    st.info("👆 Please select your hostel and category above.")
-    with st.sidebar:
-        st.write("### ⚙️ Settings")
-        request_permission_button()
-    st.stop()
 
 try:
     doc_id = f"{selected_hostel}_{selected_category}"
