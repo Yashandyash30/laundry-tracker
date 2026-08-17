@@ -298,6 +298,7 @@ with st.sidebar:
     st.write("---")
     st.write("### ⚙️ Settings")
     request_permission_button()
+    st.markdown("<div style='text-align: center; margin-top: 10px;'><a href='https://t.me/+69YKX5iyRyM1NzJl' target='_blank' style='text-decoration: none; background-color: #0088cc; color: white; padding: 8px 16px; border-radius: 4px; font-weight: bold; display: inline-block;'>📱 Join Telegram Group</a></div>", unsafe_allow_html=True)
 
 if selected_category == "First Aid":
     st.markdown("## 🩹 First Aid Kit Log")
