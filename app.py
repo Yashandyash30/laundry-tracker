@@ -258,21 +258,24 @@ if page == "User Manual":
 st.markdown("<h3 style='margin-top: -50px; margin-bottom: -15px;'>🏢 ARIES Hostel Tracker</h3>", unsafe_allow_html=True)
 st.caption("Live Status • Telegram Alerts • Browser Notifications")
 
-selected_hostel = st.radio(
-    "**📍 Select Your Hostel:**", 
-    HOSTELS, 
-    index=0, 
-    horizontal=True,
-    key="hostel_selector"
-)
+col1, col2 = st.columns(2)
+with col1:
+    selected_hostel = st.radio(
+        "**📍 Select Your Hostel:**", 
+        HOSTELS, 
+        index=0, 
+        horizontal=True,
+        key="hostel_selector"
+    )
 
-selected_category = st.radio(
-    "**📂 Select Category:**",
-    ["Laundry", "First Aid", "Pantry"],
-    index=0,
-    horizontal=True,
-    key="category_selector"
-)
+with col2:
+    selected_category = st.radio(
+        "**📂 Select Category:**",
+        ["Laundry", "First Aid", "Pantry"],
+        index=0,
+        horizontal=True,
+        key="category_selector"
+    )
 
 st.write("")
 
