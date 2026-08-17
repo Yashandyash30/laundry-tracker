@@ -45,7 +45,7 @@ We have been actively improving the app! Here are the latest updates:
 ---
 
 ### A Few Extra Cool Things
-- **Telegram Updates:** The app is hooked up to Telegram! Major events (like someone joining a queue or a machine freeing up) will be broadcasted so you can stay in the loop.
+- **Telegram Updates:** The app is hooked up to Telegram! Major events (like someone joining a queue or a machine freeing up) will be broadcasted so you can stay in the loop. Join the group here to receive updates: [Join Telegram Group](https://t.me/+69YKX5iyRyM1NzJl).
 - **Announcements:** Keep an eye on the top of the dashboard. If the washing machines are under maintenance, the admin will post an announcement there. Announcements can now be deleted per-hostel!
 - **Usage Logs:** Curious who does laundry at 3 AM? You can check the "Usage Logs" in the sidebar menu to see the history of the machines. First Aid and Pantry logs are also available!
 - **User Manual:** Need a refresher on how to use the app? You can always access this guide by clicking "User Manual" in the sidebar menu! A PDF guide is also available.
