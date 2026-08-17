@@ -5,6 +5,7 @@ from firebase_admin import credentials, firestore
 from datetime import datetime, timedelta
 import pytz
 import requests
+import threading
 from streamlit_autorefresh import st_autorefresh
 
 # --- 0. APP CONFIGURATION ---
@@ -43,8 +44,8 @@ CHAT_ID_ROHINI = st.secrets["telegram"]["chat_id_rohini"]
 
 # --- 3. NOTIFICATION SYSTEMS ---
 
-def send_telegram(message, hostel_name):
-    """Sends a message to the Telegram Group"""
+def _send_telegram_sync(message, hostel_name):
+    """Internal synchronous Telegram send (runs in background thread)"""
     try:
         chat_id = CHAT_ID_KRITIKA if hostel_name == "Kritika Hostel" else CHAT_ID_ROHINI
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -53,9 +54,14 @@ def send_telegram(message, hostel_name):
             "text": f"[{hostel_name}] {message}",
             "parse_mode": "Markdown"
         }
-        requests.post(url, json=payload)
+        requests.post(url, json=payload, timeout=10)
     except Exception as e:
         print(f"Telegram Error: {e}")
+
+def send_telegram(message, hostel_name):
+    """Sends a message to the Telegram Group (non-blocking)"""
+    thread = threading.Thread(target=_send_telegram_sync, args=(message, hostel_name), daemon=True)
+    thread.start()
 
 def trigger_browser_notification(title, body):
     """Triggers a local browser notification"""
@@ -77,23 +83,17 @@ def trigger_browser_notification(title, body):
     """
     components.html(js_code, height=0, width=0)
 
-def request_permission_button():
-    components.html("""
-    <script>
-        function askPermission() {
-            Notification.requestPermission().then(function(result) {
-                console.log(result);
-            });
-        }
-    </script>
-    <div style="text-align: center; margin-bottom: 10px;">
-        <button onclick="askPermission()" style="
-            background-color: #FF4B4B; color: white; padding: 8px 16px; 
-            border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
-            🔔 Enable Browser Alerts
-        </button>
-    </div>
-    """, height=50)
+def request_notification_permission():
+    """Injects a lightweight script to request notification permission (no iframe)"""
+    if 'notif_perm_requested' not in st.session_state:
+        st.session_state['notif_perm_requested'] = False
+    
+    if st.button("🔔 Enable Browser Alerts", use_container_width=True, key="btn_notif_perm"):
+        st.session_state['notif_perm_requested'] = True
+    
+    if st.session_state['notif_perm_requested']:
+        components.html('<script>Notification.requestPermission();</script>', height=0, width=0)
+        st.session_state['notif_perm_requested'] = False
 
 # --- 4. HELPER FUNCTIONS ---
 def get_current_time():
@@ -300,7 +300,7 @@ with st.sidebar:
     st.success(f"📍 **Current:** {selected_hostel}")
     st.write("---")
     st.write("### ⚙️ Settings")
-    request_permission_button()
+    request_notification_permission()
     st.markdown("---")
     st.markdown("### 📱 Notifications")
     st.markdown("[**Join Telegram Group**](https://t.me/+69YKX5iyRyM1NzJl)")
@@ -659,6 +659,12 @@ div[data-testid="InputInstructions"] { display: none !important; }
 """, unsafe_allow_html=True)
 
 # Display machines side-by-side on desktop, auto-stacks vertically on mobile
+# Batch all Firebase reads upfront to avoid sequential blocking
+all_machine_data = {}
+for m_name in MACHINES:
+    doc = db.collection(DB_COLLECTION).document(m_name).get()
+    all_machine_data[m_name] = doc.to_dict() if doc.exists else {}
+
 cols = st.columns(len(MACHINES))
 
 for i, machine_name in enumerate(MACHINES):
@@ -666,10 +672,9 @@ for i, machine_name in enumerate(MACHINES):
         with st.container(border=True):
             st.subheader(f"{machine_name}")
             
-            # Fetch data
+            # Use pre-fetched data
             doc_ref = db.collection(DB_COLLECTION).document(machine_name)
-            doc = doc_ref.get()
-            machine_data = doc.to_dict() if doc.exists else {}
+            machine_data = all_machine_data[machine_name]
             
             current_user = machine_data.get("current_user", None)
             queue = machine_data.get("queue", [])
@@ -921,9 +926,9 @@ custom_js = """
         }
     });
 
-    // --- COSMETIC BUTTON COLOR VALIDATION ---
-    const colorObserver = new MutationObserver(() => {
-        // Expander Buttons
+    // --- COSMETIC BUTTON COLOR VALIDATION (throttled) ---
+    let colorTimeout = null;
+    const applyColorValidation = () => {
         doc.querySelectorAll('div[data-testid="stExpander"]').forEach(exp => {
             if (!exp.hasAttribute('data-color-bound')) {
                 const pinInputWrapper = Array.from(exp.querySelectorAll('div[data-testid="stTextInput"]')).find(w => {
@@ -959,6 +964,14 @@ custom_js = """
                 }
             }
         });
+    };
+
+    const colorObserver = new MutationObserver(() => {
+        if (colorTimeout) return;
+        colorTimeout = setTimeout(() => {
+            colorTimeout = null;
+            applyColorValidation();
+        }, 200);
     });
 
     colorObserver.observe(doc.body, { childList: true, subtree: true });
