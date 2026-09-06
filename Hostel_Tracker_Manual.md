@@ -18,12 +18,67 @@ If a machine shows up as **🟢 AVAILABLE**, it's all yours!
 
 ---
 
-### 3. 🔴 Joining the Queue (No more fighting for next!)
-Is the machine you want already running? No problem, just get in line virtually!
-1. Tap the **Join Queue** button under the busy machine.
-2. Fill in your Name and a PIN. 
-3. You can even mark your laundry as **🔥 Urgent** (and give a reason) if you have an absolute emergency.This will make an another input box appear in which you can enter your emergency reason to be seen by all.
-4. Once the person before you finishes, the app will reserve the machine for you! **You have 10 minutes to claim it.** If you don't start the machine within 10 minutes, you will be automatically kicked out of the queue so others can use it.
+### 3. 🔴 The Virtual Queue System (No more waiting in hallways!)
+Is the machine you want already running or currently reserved? No problem—get in line virtually without hanging around the laundry room!
+
+#### 📋 How to Join the Queue
+1. **Find Your Machine:** Under any busy (🔴 BUSY) machine or an available machine with an active waitlist, tap **Join Queue**.
+2. **Fill in Your Details:**
+   - **Name & Designation:** Enter your name and select your status (**PhD**, **PDF**, **Project Student**, or **Visitor**).
+   - **Optional Note:** Leave any helpful comment (e.g., *"Quick rinse only"*, *"Handle basket gently"*).
+   - **Create a PIN:** Enter a secure PIN. ***Remember this PIN!*** You will need it to manage your position in line, leave the queue, or start your cycle when your turn arrives.
+3. **🔥 Urgent Requests & Community Promotion:**
+   - If you have an absolute emergency (e.g., early morning flight/travel, upcoming presentation, or running completely out of clean clothes), check the **🔥 Urgent?** box.
+   - An input field will appear asking for your **Reason**. Enter a brief explanation for your fellow hostel mates.
+   - Your entry in the queue will be highlighted with a red **🔥** badge and your reason will be prominently displayed for everyone in the hostel to see.
+   - Joining with an urgency tag also broadcasts an instant notification to the Telegram group.
+   - **How Promotion Works:** Marking urgent does *not* automatically cut the line. Instead, **residents positioned above you in the queue will see your request and have the option to move you higher in the queue** by swapping slots with you!
+4. Tap **Confirm** to lock in your spot.
+
+---
+
+#### 👥 Viewing the Live Queue
+- Directly below each machine card, you will see a live list: **Queue (N)** showing everyone currently in line in order (`1. Name`, `2. Name`, etc.).
+- Each entry displays the person's name, designation, and any urgent flags or notes.
+- The queue follows a strict **First-Come, First-Served (FIFO)** order to guarantee transparency and fairness.
+
+---
+
+#### 🔄 Managing Your Queue Spot & Moving Others Higher (PIN Protected)
+Click on your own name in the queue list to expand your control drawer. Enter your **PIN** to access the following actions:
+- **▼ Swap Down (Moving Urgent Users Higher in the Queue):**
+  - Nobody can cut in front of you or bump you down without your permission.
+  - **Promoting Someone in an Emergency:** If you notice someone below you in the queue has marked their laundry as **🔥 Urgent**, you and anyone above them have the option to boost them up!
+  - Simply expand your name in the queue, enter your PIN, and click **▼ Swap Down**.
+  - This immediately moves the person below you **higher in the queue** (one slot up), while stepping you down one slot.
+  - If multiple residents above an urgent user do this consecutively, the urgent user can be moved all the way to the top of the queue.
+- **❌ Leave Queue:**
+  - If your plans changed, you washed your clothes by hand, or you have to step out, please don't make others wait!
+  - Enter your PIN and tap **❌ Leave** to safely remove yourself from the queue and move everyone behind you up one slot.
+
+---
+
+#### ⏳ Claiming Your Machine (15-Minute Reservation Window)
+When the person before you finishes (either when their cycle timer runs out or when they tap *Finish Early*):
+1. **Machine Reserved for You:** The machine status turns **🟢 AVAILABLE**, but it is reserved **exclusively for the 1st person in line**.
+2. **15-Minute Claim Timer:**
+   - A countdown warning will display: `⏳ [Your Name] has X mins to claim.`
+   - A Telegram announcement will be sent to the group: `⏰ TIME IS UP! ... 👉 Next: *[Your Name]*`.
+   - If browser notifications are enabled, you'll also get an alert on your device.
+3. **Starting Your Turn:**
+   - Tap the dedicated **Start ([Your Name])** button under the machine.
+   - The app verifies your turn—*only the person at the front of the queue can start the machine during this window*.
+   - Confirm your cycle duration, enter your PIN, and tap **Start**. The machine turns red (🔴 BUSY), you are moved out of the queue, and your cycle begins!
+
+---
+
+#### ⏰ Timeouts & The "🚀 Skip" Safety Net
+To prevent the machine from being blocked if someone forgets or is unavailable:
+- **Single Person in Queue:** If the only person waiting does not claim the machine within 15 minutes, the app automatically drops them from the queue, notifies the Telegram group, and frees up the machine for anyone to use.
+- **Multiple People Waiting in Line:** If the first person misses their 15-minute window, the app marks them as timed out (`[Name] missed their turn.`) and reveals a **🚀 Skip to [Next Person]** button.
+  - Anyone can tap **🚀 Skip** to advance the line. The inactive user is removed, an alert is sent to Telegram, and a fresh 15-minute countdown starts for the next person in line.
+
+> 💡 **Good to Know:** This exact same fair queue system, courtesy swap, and 15-minute reservation logic also applies to the **Pantry** tracker!
 
 ---
 

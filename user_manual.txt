@@ -20,15 +20,25 @@ Welcome to our new digital system for managing the shared washing machines. No m
 
 3. The Queue
 
-If all machines are busy, click "Join Queue".
+If a machine is busy or has an existing waitlist, click "Join Queue".
 
-    Urgency: If you have an emergency (e.g., no clothes to wear other then that), tick the "🔥 Urgent" box and state your reason.
+    Join Details: Enter your Name, Designation (PhD/PDF/Project Student/Visitor), optional note, and your PIN.
 
-    The "Pass" System: You cannot cut the line. However, if you see someone behind you has an urgent need, you can choose to let them pass.
+    Urgency & Moving Higher in Queue:
+        - If you have an emergency (e.g., travel/presentation, no clean clothes left), tick the "🔥 Urgent" box and state your reason.
+        - Marking urgent does not automatically jump the line. Instead, everyone above you will see your request and have the option to move you higher in the queue!
+        - Moving Someone Higher: Click your name in the queue ➝ Enter YOUR PIN ➝ Click "▼ Swap Down". This boosts the person below you up one position into your higher slot.
+        - Note: Helping a friend in need is voluntary, and multiple residents above can step down to move an urgent user to the front.
 
-        How: Click your name in the queue ➝ Enter YOUR PIN ➝ Click "▼ Swap Down".
+    Leave Queue: If you washed by hand or plans changed, click your name in the queue ➝ Enter YOUR PIN ➝ Click "❌ Leave" to free up the line.
 
-        Note: This is voluntary. Helping a friend in need is up to you!
+    Claiming Your Turn:
+        - When the machine finishes, it is held exclusively for the 1st person in queue for 15 minutes.
+        - Click "Start (Your Name)" to claim it. Nobody else can start during your window.
+
+    Timeouts & Skip:
+        - If the 15-minute window expires without claiming, single users are auto-removed.
+        - If multiple people are queued, a "🚀 Skip to [Next Person]" button appears so the next resident can take over without waiting.
 
 4. Stay Updated
 
